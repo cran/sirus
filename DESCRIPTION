@@ -1,0 +1,20 @@
+Package: sirus
+Type: Package
+Title: Stable and Interpretable RUle Set (SIRUS)
+Version: 0.1.1
+Date: 2019-08-22
+Author: Clement Benard [aut, cre], Marvin N. Wright [ctb, cph]
+Maintainer: Clement Benard <clement.benard@safrangroup.com>
+Description: A classification algorithm based on random forests, which takes the form of a short list of rules. SIRUS combines the simplicity of decision trees with the predictivity of random forests for problems with low order interactions. The core aggregation principle of random forests is kept, but instead of aggregating predictions, SIRUS selects the most frequent nodes of the forest to form a stable rule ensemble model. The algorithm is fully described in the following article: Benard C., Biau G., da Veiga S., Scornet E. (2019) <arXiv:1908.06852>. This R package is a fork from the project ranger (<https://github.com/imbs-hl/ranger>). 
+License: GPL-3
+Imports: Rcpp (>= 0.11.2), Matrix, ROCR, ggplot2
+LinkingTo: Rcpp, RcppEigen
+Depends: R (>= 3.1)
+Suggests: survival, testthat
+RoxygenNote: 6.1.1
+URL: https://gitlab.com/safrandrti/sirus
+BugReports: https://gitlab.com/safrandrti/sirus/issues
+NeedsCompilation: yes
+Packaged: 2019-08-23 15:15:12 UTC; d584316
+Repository: CRAN
+Date/Publication: 2019-08-28 08:50:05 UTC
