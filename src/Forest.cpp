@@ -530,15 +530,16 @@ void Forest::extractPath() {
     tree_split_values = trees[i] -> getSplitValues();
     std::vector<std::vector<std::vector<double>>> tree_paths;
     // 1 split path
-    std::vector<double> path_left = {tree_split_VarIDs[0], tree_split_values[0], 0};
-    std::vector<double> path_right = {tree_split_VarIDs[0], tree_split_values[0], 1};
-    //tree_paths.push_back(path_left);
-    //tree_paths.push_back(path_right);
+    double tree_split_VarIDs_root = static_cast<double>(tree_split_VarIDs[0]);
+    std::vector<double> path_left = {tree_split_VarIDs_root, tree_split_values[0], 0};
+    std::vector<double> path_right = {tree_split_VarIDs_root, tree_split_values[0], 1};
     // 2 splits path
-    std::vector<double> path_left_1 = {tree_split_VarIDs[1], tree_split_values[1], 0};
-    std::vector<double> path_right_1 = {tree_split_VarIDs[1], tree_split_values[1], 1};
-    std::vector<double> path_left_2 = {tree_split_VarIDs[2], tree_split_values[2], 0};
-    std::vector<double> path_right_2 = {tree_split_VarIDs[2], tree_split_values[2], 1};
+    double tree_split_VarIDs_1 = static_cast<double>(tree_split_VarIDs[1]);
+    std::vector<double> path_left_1 = {tree_split_VarIDs_1, tree_split_values[1], 0};
+    std::vector<double> path_right_1 = {tree_split_VarIDs_1, tree_split_values[1], 1};
+    double tree_split_VarIDs_2 = static_cast<double>(tree_split_VarIDs[2]);
+    std::vector<double> path_left_2 = {tree_split_VarIDs_2, tree_split_values[2], 0};
+    std::vector<double> path_right_2 = {tree_split_VarIDs_2, tree_split_values[2], 1};
     std::vector<std::vector<double>> path_1 = {path_left};
     std::vector<std::vector<double>> path_2 = {path_right};
     std::vector<std::vector<double>> path_3;

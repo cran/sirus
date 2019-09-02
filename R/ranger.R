@@ -555,16 +555,6 @@ ranger <- function(formula = NULL, data = NULL, num.trees = 500, mtry = NULL,
   ## No loaded forest object
   loaded.forest <- list()
   
-  ## Use sparse matrix
-  if ("dgCMatrix" %in% class(data.final)) {
-    sparse.data <- data.final
-    data.final <- matrix(c(0, 0))
-    use.sparse.data <- TRUE
-  } else {
-    sparse.data <- Matrix(matrix(c(0, 0)))
-    use.sparse.data <- FALSE
-  }
-  
   if (respect.unordered.factors == "order"){
     order.snps <- TRUE
   } else {
@@ -584,7 +574,7 @@ ranger <- function(formula = NULL, data = NULL, num.trees = 500, mtry = NULL,
                       replace, probability, unordered.factor.variables, use.unordered.factor.variables, 
                       save.memory, splitrule.num, case.weights, use.case.weights, class.weights, 
                       predict.all, keep.inbag, sample.fraction, alpha, minprop, holdout, prediction.type, 
-                      num.random.splits, sparse.data, use.sparse.data, order.snps, oob.error, max.depth, 
+                      num.random.splits, order.snps, oob.error, max.depth, 
                       inbag, use.inbag)
   
   if (length(result) == 0) {

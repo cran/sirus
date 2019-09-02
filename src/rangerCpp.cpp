@@ -25,7 +25,6 @@
  http://www.imbs-luebeck.de
  #-------------------------------------------------------------------------------*/
 
-#include <RcppEigen.h>
 #include <vector>
 #include <sstream>
 #include <memory>
@@ -41,12 +40,10 @@
 #include "DataChar.h"
 #include "DataRcpp.h"
 #include "DataFloat.h"
-#include "DataSparse.h"
 #include "utility.h"
 
 using namespace sirus;
 
-// [[Rcpp::depends(RcppEigen)]]
 // [[Rcpp::export]]
 Rcpp::List rangerCpp(uint treetype, std::string dependent_variable_name, Rcpp::NumericMatrix& input_data,
     std::vector<std::string> variable_names, uint mtry, uint num_trees, bool verbose, uint seed, uint num_threads,
@@ -58,14 +55,13 @@ Rcpp::List rangerCpp(uint treetype, std::string dependent_variable_name, Rcpp::N
     bool use_unordered_variable_names, bool save_memory, uint splitrule_r, std::vector<double>& case_weights,
     bool use_case_weights, std::vector<double>& class_weights, bool predict_all, bool keep_inbag,
     std::vector<double>& sample_fraction, double alpha, double minprop, bool holdout, uint prediction_type_r,
-    uint num_random_splits, Eigen::SparseMatrix<double>& sparse_data, bool use_sparse_data, bool order_snps, 
+    uint num_random_splits, bool order_snps, 
     bool oob_error, uint max_depth, std::vector<std::vector<size_t>>& inbag, bool use_inbag) {
 
   Rcpp::List result;
 
   try {
     std::unique_ptr<Forest> forest { };
-    std::unique_ptr<Forest> forest_2 { };
     std::unique_ptr<Data> data { };
 
     // Empty split select weights and always split variables if not used
@@ -94,21 +90,12 @@ Rcpp::List rangerCpp(uint treetype, std::string dependent_variable_name, Rcpp::N
 
     size_t num_rows;
     size_t num_cols;
-    if (use_sparse_data) {
-      num_rows = sparse_data.rows();
-      num_cols = sparse_data.cols();
-    } else {
-      num_rows = input_data.nrow();
-      num_cols = input_data.ncol();
-    }
+    num_rows = input_data.nrow();
+    num_cols = input_data.ncol();
 
     // Initialize data 
-    if (use_sparse_data) {
-      data = make_unique<DataSparse>(sparse_data, variable_names, num_rows, num_cols);
-    } else {
-      data = make_unique<DataRcpp>(input_data, variable_names, num_rows,
-          num_cols);
-    }
+    data = make_unique<DataRcpp>(input_data, variable_names, num_rows,
+      num_cols);
 
     // If there is snp data, add it
     if (snp_data.nrow() > 1) {
@@ -127,7 +114,6 @@ Rcpp::List rangerCpp(uint treetype, std::string dependent_variable_name, Rcpp::N
         forest = make_unique<ForestProbability>();
       } else {
         forest = make_unique<ForestClassification>();
-        forest_2 = make_unique<ForestClassification>();
       }
       break;
     case TREE_REGRESSION:
@@ -151,11 +137,6 @@ Rcpp::List rangerCpp(uint treetype, std::string dependent_variable_name, Rcpp::N
         prediction_mode, sample_with_replacement, unordered_variable_names, save_memory, splitrule, case_weights,
         inbag, predict_all, keep_inbag, sample_fraction, alpha, minprop, holdout, prediction_type, num_random_splits, 
         order_snps, max_depth);
-    /*forest_2->initR(dependent_variable_name, std::move(data), mtry, num_trees, verbose_out, seed, num_threads,
-                  importance_mode, min_node_size, split_select_weights, always_split_variable_names, status_variable_name,
-                  prediction_mode, sample_with_replacement, unordered_variable_names, save_memory, splitrule, case_weights,
-                  inbag, predict_all, keep_inbag, sample_fraction, alpha, minprop, holdout, prediction_type, num_random_splits, 
-                  order_snps, max_depth);*/
 
     // Load forest object if in prediction mode
     if (prediction_mode) {
@@ -329,13 +310,13 @@ Rcpp::List rangerMergeCpp(int numTrees, std::vector<std::vector<std::vector<doub
   std::vector<double> proba_cln = proba;
   std::sort(proba_cln.begin(), proba_cln.end());
   proba_cln.erase(std::unique(proba_cln.begin(), proba_cln.end()), proba_cln.end());
-  int p0SeqSize = 51;
+  size_t p0SeqSize = 51;
   if (p0SeqSize > proba_cln.size()){
     p0SeqSize = proba_cln.size();
   }
   std::vector<double> proba100(proba_cln.end() - p0SeqSize, proba_cln.end());
   std::vector<double> p0Seq;
-  for (int i = 0; i < (proba100.size() - 1); i++) {
+  for (size_t i = 0; i < (proba100.size() - 1); i++) {
     double p0 = (proba100[i] + proba100[i + 1])/2;
     p0Seq.push_back(p0);
   }
@@ -373,13 +354,13 @@ Rcpp::NumericVector stabilityMetricCpp(int numTrees, std::vector<double> proba){
   std::vector<double> proba_cln = proba;
   std::sort(proba_cln.begin(), proba_cln.end());
   proba_cln.erase(std::unique(proba_cln.begin(), proba_cln.end()), proba_cln.end());
-  int p0SeqSize = 51;
+  size_t p0SeqSize = 51;
   if (p0SeqSize > proba_cln.size()){
     p0SeqSize = proba_cln.size();
   }
   std::vector<double> proba100(proba_cln.end() - p0SeqSize, proba_cln.end());
   std::vector<double> p0Seq;
-  for (int i = 0; i < (proba100.size() - 1); i++) {
+  for (size_t i = 0; i < (proba100.size() - 1); i++) {
     double p0 = (proba100[i] + proba100[i + 1])/2;
     p0Seq.push_back(p0);
   }

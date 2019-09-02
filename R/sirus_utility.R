@@ -21,7 +21,7 @@ get.X.bin <- function(X, breaks){
   q <- length(breaks) - 1
   max.bool <- breaks[q] == breaks[q+1]
   breaks <- unique(breaks)
-  if (length(breaks) >= 2){
+  if (length(breaks) >= 2 & !all(X %in% c(0,1))){
     X.bin <- cut(as.numeric(X), breaks = breaks, labels = FALSE, right = FALSE)
     if (max.bool){
       X.bin[is.na(X.bin)] <- length(breaks)
