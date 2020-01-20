@@ -4,20 +4,22 @@
 \alias{sirus.plot.cv}
 \title{Plot SIRUS cross-validation.}
 \usage{
-sirus.plot.cv(sirus.cv.grid, num.rule.max = 25)
+sirus.plot.cv(sirus.cv.grid, p0.criterion = NULL, num.rule.max = 25)
 }
 \arguments{
 \item{sirus.cv.grid}{Cross-validation results returned by sirus.cv.}
+
+\item{p0.criterion}{Criterion to pick optimal p0 to display on plots: 'pred' to maximize accuracy and 'stab' for a tradeoff stability/accuracy. Default is 'stab' for regression and 'pred' for classification.}
 
 \item{num.rule.max}{Upper limit on the number of rules for the x-axis. Default is 25.}
 }
 \value{
 Plots of cross-validation results.
-  \item{\code{error}}{plot of 1-AUC vs number of rules (ggplot object).}
+  \item{\code{error}}{plot of error vs number of rules (ggplot object).}
   \item{\code{stab}}{plot of stability vs number of rules (ggplot object).}
 }
 \description{
-Plot SIRUS cross-validation path: 1-AUC and stability versus the number of rules when p0 varies.
+Plot SIRUS cross-validation path: error and stability versus the number of rules when p0 varies.
 }
 \examples{
 ## load sirus

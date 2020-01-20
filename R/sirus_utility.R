@@ -35,9 +35,9 @@ get.X.bin <- function(X, breaks){
 }
 
 # run ranger iteratively
-ranger.stab <- function(data.bin.y, num.trees.step = 1000, alpha = 0.05, mtry = NULL, num.trees = NULL,
-                        num.threads = NULL, replace = TRUE, sample.fraction = ifelse(replace, 1, 0.632),
-                        verbose = TRUE, seed = NULL){
+ranger.stab <- function(data.bin.y, num.trees.step = 1000, alpha = 0.05, mtry = NULL, max.depth = 2, 
+                        num.trees = NULL, num.threads = NULL, replace = TRUE,
+                        sample.fraction = ifelse(replace, 1, 0.632), verbose = TRUE, seed = NULL){
   
   if (is.null(num.trees)){
     # automatic set of num.trees with stability stopping criterion
@@ -45,7 +45,7 @@ ranger.stab <- function(data.bin.y, num.trees.step = 1000, alpha = 0.05, mtry = 
     num.trees <- 0
     # Build trees until 1 - alpha (95%) stability
     while (stab.metric < (1 - alpha)){
-      forest <- ranger(y ~., data = data.bin.y, num.trees = num.trees.step, mtry = mtry, max.depth = 2,
+      forest <- ranger(y ~., data = data.bin.y, num.trees = num.trees.step, mtry = mtry, max.depth = max.depth,
                        importance = 'none', oob.error = FALSE, write.forest = FALSE, replace = replace,
                        sample.fraction = sample.fraction, num.threads = num.threads, seed = seed)
       paths.temp <- forest$paths
@@ -68,7 +68,7 @@ ranger.stab <- function(data.bin.y, num.trees.step = 1000, alpha = 0.05, mtry = 
     }
   }else{
     # User provided value for num.trees
-    forest <- ranger(y ~., data = data.bin.y, num.trees = num.trees, mtry = mtry, max.depth = 2,
+    forest <- ranger(y ~., data = data.bin.y, num.trees = num.trees, mtry = mtry, max.depth = max.depth,
                      importance = 'none', oob.error = FALSE, write.forest = FALSE, replace = replace,
                      sample.fraction = sample.fraction, num.threads = num.threads, seed = seed)
     paths <- forest$paths
@@ -85,8 +85,8 @@ ranger.stab <- function(data.bin.y, num.trees.step = 1000, alpha = 0.05, mtry = 
   
 }
 
-# path post-treatment
-paths.filter <- function(paths, proba, num.rule){
+# path post-treatment for d = 1 or 2 (exact and deterministic algorithm)
+paths.filter.2 <- function(paths, proba, num.rule){
   
   paths.ftr <- list()
   proba.ftr <- c()
@@ -141,75 +141,80 @@ paths.filter <- function(paths, proba, num.rule){
       num.rule.temp <- length(paths.ftr)
       
       ### add generated interaction
-      # 1-split path
-      # TO DO : add path 2 splits same var
-      if (d == 1){
-        split.gen.temp <- list(split.ind)
-        split.gen <- c(split.gen, split.gen.temp)
-      }
-      # 2 split-path
-      if (d == 2){
-        
-        # get index of rules involving any similar constraint
-        bool.ind <- lapply(paths.ftr, function(path){
-          bool <- sapply(path, function(x){
-            any(sapply(path.ind, function(y){
-              all(y[1:2] == x[1:2])
-            }))
-          })
-          return(c(all(bool), any(bool)))
-        })
-        bool.all <- sapply(bool.ind, function(x){x[1]})
-        bool.any <- sapply(bool.ind, function(x){x[2]})
-        bool.mixed <- !bool.all & bool.any
-        num.rule.all <- sum(bool.all)
-        num.rule.any <- sum(bool.any)
-        
-        if (num.rule.all >= 2){
-          split.gen <- c(split.gen, list(split.ind))
+      if (d <= 2){
+        # 1-split path
+        # TO DO : add path 2 splits same var
+        if (d == 1){
+          split.gen.temp <- list(split.ind)
+          split.gen <- c(split.gen, split.gen.temp)
         }
-        
-        # combine path with paths.ftr
-        split.gen.temp <- lapply(paths.ftr[bool.mixed], function(x){
-          split.diff <- setdiff(c(x, path.ind), intersect(x, path.ind))
-          split1 <- list(list(split.diff[[1]][1:2]))
-          if (all(split.diff[[1]][1:2] == split.diff[[2]][1:2]) & !(split1 %in% split.gen)){
-            return(split1)
+        # 2 split-path
+        if (d == 2){
+          
+          # get index of rules involving any similar constraint
+          bool.ind <- lapply(paths.ftr, function(path){
+            if (length(path) <= 2){
+              bool <- sapply(path, function(x){
+                any(sapply(path.ind, function(y){
+                  all(y[1:2] == x[1:2])
+                }))
+              })
+              return(c(all(bool), any(bool)))
+            }else{
+              return(c(FALSE, FALSE))
+            }
+          })
+          bool.all <- sapply(bool.ind, function(x){x[1]})
+          bool.any <- sapply(bool.ind, function(x){x[2]})
+          bool.mixed <- !bool.all & bool.any
+          num.rule.all <- sum(bool.all)
+          num.rule.any <- sum(bool.any)
+          
+          if (num.rule.all >= 2){
+            split.gen <- c(split.gen, list(split.ind))
           }
-        })
-        # specific case of two splits on the same direction
-        if (split.ind[[1]][1] == split.ind[[2]][1]){
-          bool.double <- sapply(split.gen, function(split){
-            all(sapply(split, function(x){list(x) %in% split.ind})) & length(split) == 1
-          })
-          split.gen.temp2 <- lapply(split.gen[bool.double], function(split){
-            split.diff <- setdiff(split.ind, split)
-            if (length(split.diff) > 0){
-              split.diff
+          
+          # combine path with paths.ftr
+          split.gen.temp <- lapply(paths.ftr[bool.mixed], function(x){
+            split.diff <- setdiff(c(x, path.ind), intersect(x, path.ind))
+            split1 <- list(list(split.diff[[1]][1:2]))
+            if (all(split.diff[[1]][1:2] == split.diff[[2]][1:2]) & !(split1 %in% split.gen)){
+              return(split1)
             }
           })
-          split.gen.temp <- c(split.gen.temp, split.gen.temp2)
+          # specFific case of two splits on the same direction
+          if (split.ind[[1]][1] == split.ind[[2]][1]){
+            bool.double <- sapply(split.gen, function(split){
+              all(sapply(split, function(x){list(x) %in% split.ind})) & length(split) == 1
+            })
+            split.gen.temp2 <- lapply(split.gen[bool.double], function(split){
+              split.diff <- setdiff(split.ind, split)
+              if (length(split.diff) > 0){
+                split.diff
+              }
+            })
+            split.gen.temp <- c(split.gen.temp, split.gen.temp2)
+          }
+        }
+        
+        split.gen.temp <- Filter(Negate(is.null), split.gen.temp)
+        if (length(split.gen.temp) > 0){
+          split.gen.1 <- Filter(function(x){length(x)==1}, split.gen)
+          split.gen.temp <- c(split.gen.temp, unlist(lapply(split.gen.temp, function(split){
+            lapply(split.gen.1, function(split1){
+              if (length(split) == 1 & split[[1]][1] == split1[[1]][1] & split[[1]][2] != split1[[1]][2]){
+                if (split[[1]][2] > split1[[1]][2]){
+                  c(split1, split)
+                }else{
+                  c(split, split1)
+                }
+              }
+            })
+          }), recursive = F))
+          split.gen.temp <- setdiff(split.gen.temp, split.gen)
+          split.gen <- c(split.gen, split.gen.temp)
         }
       }
-      
-      split.gen.temp <- Filter(Negate(is.null), split.gen.temp)
-      if (length(split.gen.temp) > 0){
-        split.gen.1 <- Filter(function(x){length(x)==1}, split.gen)
-        split.gen.temp <- c(split.gen.temp, unlist(lapply(split.gen.temp, function(split){
-          lapply(split.gen.1, function(split1){
-            if (length(split) == 1 & split[[1]][1] == split1[[1]][1] & split[[1]][2] != split1[[1]][2]){
-              if (split[[1]][2] > split1[[1]][2]){
-                c(split1, split)
-              }else{
-                c(split, split1)
-              }
-            }
-          })
-        }), recursive = F))
-        split.gen.temp <- setdiff(split.gen.temp, split.gen)
-        split.gen <- c(split.gen, split.gen.temp)
-      }
-      
     }
     ind <- ind + 1
     
@@ -217,6 +222,67 @@ paths.filter <- function(paths, proba, num.rule){
   
   return(list(paths = paths.ftr, proba = proba.ftr))
     
+}
+# path post-treatment  for any d (stochastic heuristic)
+paths.filter.d <- function(paths, proba, num.rule, data.bin){
+  
+  # parameters
+  nvar <- ncol(data.bin)
+  nrule.max <- length(paths)
+  nrule <- 1
+  paths.ftr <- list()
+  proba.ftr <- list()
+  ind.batch <- 0
+  nsample <- 5*num.rule
+  
+  # generate independent data
+  values <- apply(data.bin, 2, unique)
+  data.indep <- sapply(values, function(x){sample(x, size = nsample, replace = T)})
+  
+  while (nrule < num.rule & ind.batch < nrule.max){
+    
+    # select a batch of rules
+    nrule.batch <- min(nrule.max - ind.batch, num.rule)
+    paths.k <- paths[ind.batch + 1:nrule.batch]
+    proba.k <- proba[ind.batch + 1:nrule.batch]
+    
+    # get data.rule
+    path.supp <- sapply(paths.k, get.rule.supp.bin, data.bin = data.indep)
+    data.rule.b <- matrix(rep(0, nrule.batch*nsample), ncol = nrule.batch)
+    data.rule.b[path.supp] <- 1 
+    if (ind.batch == 0){
+      ind.sel <- c(1)
+      data.rule <- cbind(rep(1, nsample), data.rule.b)
+    }else{
+      ind.sel <- 1:ncol(data.rule)
+      data.rule <- cbind(data.rule, data.rule.b)
+    }
+    
+    # get index of rules to remove
+    ind.path <- list()
+    for (ind in (nrule + 1):ncol(data.rule)){
+      ind.sel <- c(ind.sel, ind)
+      data.rule.temp <- data.rule[,ind.sel]
+      rk.diff <- length(ind.sel) - rankMatrix(data.rule.temp)[1]
+      rk.diff
+      if (rk.diff > 0){ind.sel <- head(ind.sel, -1)}
+    }
+    
+    data.rule <- data.rule[,ind.sel]
+    if (ind.batch == 0){ind.path <- ind.sel - nrule}else{ind.path <- ind.sel - nrule - 1}
+    ind.path <- ind.path[ind.path > 0]
+    paths.ftr <- c(paths.ftr, paths.k[unlist(ind.path)])
+    proba.ftr <- c(proba.ftr, proba.k[unlist(ind.path)])
+    nrule <- length(paths.ftr)
+    ind.batch <- ind.batch + nrule.batch
+    
+  }
+  
+  paths.ftr <- paths.ftr[1:min(num.rule, nrule)]
+  proba.ftr <- unlist(proba.ftr[1:min(num.rule, nrule)])
+  
+  return(list(paths = paths.ftr, proba = proba.ftr))
+  
 }
 
 # recover rule from path
@@ -329,9 +395,9 @@ data.y.check <- function(data, y){
   data.check(data)
   
   # check output
-  y.valid <- is.vector(y) & is.numeric(y) & all(unique(y) %in% c(0, 1))
+  y.valid <- is.vector(y) & is.numeric(y)
   if (!y.valid){
-    stop("Invalid y. The output y must be a numeric vector taking 0 and 1 values.")
+    stop("Invalid y. The output y must be a numeric vector.")
   }
   # check dimension consistency
   dim.valid <- nrow(data) == length(y)
@@ -393,7 +459,8 @@ sirus.model.check <- function(sirus.m){
   sirus.valid <- FALSE
   type.valid <- is.list(sirus.m)
   if (type.valid){
-    names.valid <- all(names(sirus.m) == c('rules', 'rules.out', 'proba', 'paths', 'num.trees', 'mean'))
+    names.valid <- all(names(sirus.m) == c('rules', 'rules.out', 'proba', 'paths', 'num.trees', 'mean', 'type',
+                                           'rule.weights', 'rule.glm', 'data.names'))
     if (names.valid){
       rules.valid <- all(sapply(sirus.m$rules, function(rule){
         is.list(rule) & 
@@ -406,6 +473,7 @@ sirus.model.check <- function(sirus.m){
       }))
       proba.valid <- is.numeric(sirus.m$proba) & all(sirus.m$proba >= 0) & all(sirus.m$proba <= 1)
       mean.valid <- is.numeric(sirus.m$mean)
+      weights.valid <- is.numeric(sirus.m$rule.weights)
       sirus.valid <- type.valid & names.valid & rules.valid & rules.out.valid &
                      proba.valid & mean.valid
     }
@@ -413,4 +481,3 @@ sirus.model.check <- function(sirus.m){
   return(sirus.valid)
   
 }
-  

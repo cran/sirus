@@ -12,7 +12,7 @@ sirus.predict(sirus.m, data.test)
 \item{data.test}{Testing data (dataframe of new observations).}
 }
 \value{
-Predictions. A vector of the predicted probability of each new observation to be of class 1.
+Predictions. For classification, vector of the predicted probability of each new observation to be of class 1.
 }
 \description{
 Predictions of a SIRUS model for new observations.

@@ -3,19 +3,19 @@
 C. Benard (Safran Tech & Sorbonne University)
 
 ### Introduction
-SIRUS (Stable and Interpretable RUle Set) is a classification algorithm based on random forests, which takes the form of a short list of rules. 
+SIRUS (Stable and Interpretable RUle Set) is a regression and classification algorithm based on random forests, which takes the form of a short list of rules. 
 SIRUS combines the simplicity of decision trees with the predictivity of random forests for problems with low order interactions. 
 The core aggregation principle of random forests is kept, but instead of aggregating predictions, SIRUS selects the most frequent nodes of the forest to form a stable rule ensemble model.
 
 This R package is a fork from the  project ranger (https://github.com/imbs-hl/ranger).
 
 ### Installation
-To install sirus, download sirus-0.1.1.tar.gz and just run:
-	install.packages("sirus-0.1.1.tar.gz", repos = NULL)
+To install sirus, download sirus-0.2.1.tar.gz and just run:
+	install.packages("sirus-0.2.1.tar.gz", repos = NULL)
 
 R version >= 3.1 is required. If you compile yourself, the new RTools toolchain is required.
 
-Pre-compiled binaries are available for windows (sirus_0.1.1.zip) and linux (sirus_0.1.1_R_x86_64-redhat-linux-gnu.tar.gz).
+Pre-compiled binaries are available for windows (sirus_0.2.1.zip), mac (sirus_0.2.1.tgz) and linux (sirus_0.2.1_R_x86_64-redhat-linux-gnu.tar.gz).
 
 
 ### Usage

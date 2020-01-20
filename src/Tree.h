@@ -63,6 +63,9 @@ public:
   const std::vector<size_t>& getSplitVarIDs() const {
     return split_varIDs;
   }
+  const std::vector<std::vector<std::vector<double>>> getPaths() const {
+    return paths;
+  }
 
   const std::vector<size_t>& getOobSampleIDs() const {
     return oob_sampleIDs;
@@ -132,6 +135,9 @@ protected:
   // Value to split at for each node, for now only binary split
   // For terminal nodes the prediction value is saved here
   std::vector<double> split_values;
+  
+  // paths
+  std::vector<std::vector<std::vector<double>>> paths;
 
   // Vector of left and right child node IDs, 0 for no child
   std::vector<std::vector<size_t>> child_nodeIDs;

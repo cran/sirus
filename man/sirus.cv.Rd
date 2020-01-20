@@ -4,19 +4,22 @@
 \alias{sirus.cv}
 \title{Estimation of p0.}
 \usage{
-sirus.cv(data, y, nfold = 10, ncv = 30, num.rule.max = 25, q = 10,
-  num.trees.step = 1000, alpha = 0.05, mtry = NULL,
-  num.trees = NULL, num.threads = NULL, replace = TRUE,
-  sample.fraction = NULL, verbose = TRUE, seed = NULL)
+sirus.cv(data, y, type = "auto", nfold = 10, ncv = NULL,
+  num.rule.max = 25, q = 10, num.trees.step = 1000, alpha = 0.05,
+  mtry = NULL, max.depth = 2, num.trees = NULL, num.threads = NULL,
+  replace = TRUE, sample.fraction = NULL, verbose = TRUE,
+  seed = NULL)
 }
 \arguments{
 \item{data}{Input dataframe, each row is an observation vector.}
 
-\item{y}{Binary response variable taking 0 and 1 values.}
+\item{y}{Numeric response variable. For classification, y takes only 0 and 1 values.}
+
+\item{type}{'reg' for regression, 'classif' for classification and 'auto' for automatic detection (classification if y takes only 0 and 1 values).}
 
 \item{nfold}{Number of folds in the cross-validation. Default is 10.}
 
-\item{ncv}{Number of repetitions of the cross-validation. Default is 30.}
+\item{ncv}{Number of repetitions of the cross-validation. Default is 10 for regression and 30 for classification.}
 
 \item{num.rule.max}{Maximum number of rules of SIRUS model in the cross-validation grid. Default is 25.}
 
@@ -27,6 +30,8 @@ sirus.cv(data, y, nfold = 10, ncv = 30, num.rule.max = 25, q = 10,
 \item{alpha}{Parameter of the stopping criterion for the number of trees: stability has to reach 1 - alpha to stop the growing of the forest. Ignored if num.trees is provided.}
 
 \item{mtry}{Number of variables to possibly split at each node. Default is the number of variables divided by 3.}
+
+\item{max.depth}{Maximal tree depth. Default and strongly recommanded value is 2.}
 
 \item{num.trees}{Number of trees grown in the forest. If NULL (recommanded), the number of trees is automatically set using a stability stopping criterion.}
 
@@ -42,14 +47,14 @@ sirus.cv(data, y, nfold = 10, ncv = 30, num.rule.max = 25, q = 10,
 }
 \value{
 Optimal value of p0 with the elements
-  \item{\code{p0}}{Optimal p0 value.}
-  \item{\code{error}}{1 - AUC of the SIRUS model with the optimal p0.}
-  \item{\code{num.rules}}{Number of rules of the SIRUS model with the optimal p0.}
-  \item{\code{error.grid.p0}}{Table with the full cross-validation results for a fine grid of p0: number of rules, stability, error (1-AUC).}
+  \item{\code{p0.pred}}{Optimal p0 value to maximize model accuracy.}
+  \item{\code{p0.stab}}{Optimal p0 value for a tradeoff between stability and accuracy.}
+  \item{\code{error.grid.p0}}{Table with the full cross-validation results for a fine grid of p0: number of rules, stability, error.}
+  \item{\code{type}}{'reg' for regression, 'classif' for classification.}
 }
 \description{
 Estimation by cross-validation of the hyperparameter p0 used to select rules in sirus.fit.
-For a robust estimation, it is recommanded to run multiple cross-validations, typically 30.
+For a robust estimation, it is recommanded to run multiple cross-validations.
 }
 \examples{
 ## load sirus

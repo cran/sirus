@@ -524,51 +524,18 @@ void Forest::grow() {
 void Forest::extractPath() {
   // TO DO : fix order path
   for (size_t i = 0; i < num_trees; ++i) {
-    std::vector<size_t> tree_split_VarIDs;
-    tree_split_VarIDs = trees[i] -> getSplitVarIDs();
-    std::vector<double> tree_split_values;
-    tree_split_values = trees[i] -> getSplitValues();
     std::vector<std::vector<std::vector<double>>> tree_paths;
-    // 1 split path
-    double tree_split_VarIDs_root = static_cast<double>(tree_split_VarIDs[0]);
-    std::vector<double> path_left = {tree_split_VarIDs_root, tree_split_values[0], 0};
-    std::vector<double> path_right = {tree_split_VarIDs_root, tree_split_values[0], 1};
-    // 2 splits path
-    double tree_split_VarIDs_1 = static_cast<double>(tree_split_VarIDs[1]);
-    std::vector<double> path_left_1 = {tree_split_VarIDs_1, tree_split_values[1], 0};
-    std::vector<double> path_right_1 = {tree_split_VarIDs_1, tree_split_values[1], 1};
-    double tree_split_VarIDs_2 = static_cast<double>(tree_split_VarIDs[2]);
-    std::vector<double> path_left_2 = {tree_split_VarIDs_2, tree_split_values[2], 0};
-    std::vector<double> path_right_2 = {tree_split_VarIDs_2, tree_split_values[2], 1};
-    std::vector<std::vector<double>> path_1 = {path_left};
-    std::vector<std::vector<double>> path_2 = {path_right};
-    std::vector<std::vector<double>> path_3;
-    std::vector<std::vector<double>> path_4;
-    std::vector<std::vector<double>> path_5;
-    std::vector<std::vector<double>> path_6;
-    if (path_left[0] > path_left_1[0] || (path_left[0] == path_left_1[0] && path_left[1] > path_left_1[1])){
-      path_3 = {path_left_1, path_left};
-      path_4 = {path_right_1, path_left};
-    }else{
-      path_3 = {path_left, path_left_1};
-      path_4 = {path_left, path_right_1};
-    }
-    if (path_right[0] > path_right_2[0] || (path_right[0] == path_right_2[0] && path_right[1] > path_right_2[1])){
-      path_5 = {path_left_2, path_right};
-      path_6 = {path_right_2, path_right};
-    }else{
-      path_5 = {path_right, path_left_2};
-      path_6 = {path_right, path_right_2};
-    }
-    tree_paths.push_back(path_1);
-    tree_paths.push_back(path_2);
-    tree_paths.push_back(path_3);
-    tree_paths.push_back(path_4);
-    tree_paths.push_back(path_5);
-    tree_paths.push_back(path_6);
-    
+    tree_paths = trees[i] -> getPaths();
     std::map<std::vector<std::vector<double> >, int>::iterator it;
     for (auto& path : tree_paths) {
+      std::sort(path.begin(), path.end(),
+          [](const std::vector<double>& a, const std::vector<double>& b) {
+            if (a[0] == b[0]){
+              return a[1] < b[1];
+            }else{
+              return a[0] < b[0];
+            }
+      });
       it = forest_paths.find(path);
       if (it == forest_paths.end()){
         forest_paths[path] = 1;

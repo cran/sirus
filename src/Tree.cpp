@@ -300,6 +300,23 @@ bool Tree::splitNode(size_t nodeID) {
   child_nodeIDs[1][nodeID] = right_child_nodeID;
   createEmptyNode();
   start_pos[right_child_nodeID] = end_pos[nodeID];
+  
+  // create tree paths
+  std::vector<std::vector<double>> path;
+  std::vector<std::vector<double>> path_left;
+  std::vector<std::vector<double>> path_right;
+  if (nodeID != 0){
+    path = paths[nodeID];
+    path_left = path;
+    path_right = path;
+  }
+  double split_VarID_double = static_cast<double>(split_varID);
+  std::vector<double> split_left = {split_VarID_double, split_value, 0};
+  std::vector<double> split_right = {split_VarID_double, split_value, 1};
+  path_left.push_back(split_left);
+  path_right.push_back(split_right);
+  paths[left_child_nodeID] = path_left;
+  paths[right_child_nodeID] = path_right;
 
   // For each sample in node, assign to left or right child
   if (data->isOrderedVariable(split_varID)) {
@@ -352,6 +369,10 @@ void Tree::createEmptyNode() {
   child_nodeIDs[1].push_back(0);
   start_pos.push_back(0);
   end_pos.push_back(0);
+  std::vector<double> path0 = {0, 0, 0};
+  std::vector<std::vector<double>> path_init;
+  path_init.push_back(path0);
+  paths.push_back(path_init);
 
   createEmptyNodeInternal();
 }

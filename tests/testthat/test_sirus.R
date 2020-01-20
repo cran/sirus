@@ -51,7 +51,7 @@ test_that("sirus.cv returns valid p0", {
                        num.trees.step = 1000, alpha = 0.05, mtry = NULL, num.trees = 100,
                        num.threads = NULL, replace = TRUE, sample.fraction = NULL,
                        verbose = FALSE, seed = NULL)
-  p0 <- sirus.cv.grid$p0
+  p0 <- sirus.cv.grid$p0.stab
   is.valid <- is.numeric(p0) & (p0 > 0) & (p0 < 1)
   expect_true(is.valid)
 })

@@ -5,18 +5,20 @@
 \alias{sirus.fit}
 \title{Fit SIRUS.}
 \usage{
-sirus.fit(data, y, num.rule = 10, p0 = NULL, num.rule.max = 25,
-  q = 10, num.trees.step = 1000, alpha = 0.05, mtry = NULL,
-  num.trees = NULL, num.threads = NULL, replace = TRUE,
-  sample.fraction = ifelse(replace, 1, 0.632), verbose = TRUE,
-  seed = NULL)
+sirus.fit(data, y, type = "auto", num.rule = 10, p0 = NULL,
+  num.rule.max = 25, q = 10, num.trees.step = 1000, alpha = 0.05,
+  mtry = NULL, max.depth = 2, num.trees = NULL, num.threads = NULL,
+  replace = TRUE, sample.fraction = ifelse(replace, 1, 0.632),
+  verbose = TRUE, seed = NULL)
 }
 \arguments{
 \item{data}{Input dataframe, each row is an observation vector.}
 
-\item{y}{Binary response variable taking 0 and 1 values.}
+\item{y}{Numeric response variable. For classification, y takes only 0 and 1 values.}
 
-\item{num.rule}{Number of rules in SIRUS model. Default is 10. Ignored if a p0 value is provided.}
+\item{type}{'reg' for regression, 'classif' for classification and 'auto' for automatic detection (classification if y takes only 0 and 1 values).}
+
+\item{num.rule}{Number of rules in SIRUS model. Default is 10. Ignored if a p0 value is provided. For regression, the effective number of rules can be smaller than num.rule because of the additional selection in the final linear aggregation of the rules.}
 
 \item{p0}{Selection threshold on the frequency of appearance of a path in the forest. Default is NULL and num.rule is used to select rules.}
 
@@ -29,6 +31,8 @@ sirus.fit(data, y, num.rule = 10, p0 = NULL, num.rule.max = 25,
 \item{alpha}{Parameter of the stopping criterion for the number of trees: stability has to reach 1 - alpha to stop the growing of the forest. Ignored if num.trees is provided.}
 
 \item{mtry}{Number of variables to possibly split at each node. Default is the number of variables divided by 3.}
+
+\item{max.depth}{Maximal tree depth. Default and strongly recommanded value is 2.}
 
 \item{num.trees}{Number of trees grown in the forest. Default is NULL. If NULL (recommanded), the number of trees is automatically set using a stability based stopping criterion.}
 
@@ -51,7 +55,8 @@ SIRUS model with elements
   \item{\code{mean}}{Mean output over the full training data. Default model output if no rule is selected.}
 }
 \description{
-Fit a SIRUS classification model for a given number of rules (10 by default) or a given p0.
+Fit a SIRUS model for a given number of rules (10 by default) or a given p0.
+If the output y takes only 0 and 1 values a classification model is fit, otherwise a regression model is fit.
 The number of trees is tuned automatically with a stopping criterion based on stability.
 The hyperparameter p0 can be tuned using sirus.cv.
 }
