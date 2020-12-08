@@ -2,27 +2,31 @@
 % Please edit documentation in R/sirus.R
 \name{sirus.plot.cv}
 \alias{sirus.plot.cv}
-\title{Plot SIRUS cross-validation.}
+\title{Plot SIRUS cross-validation path.}
 \usage{
 sirus.plot.cv(sirus.cv.grid, p0.criterion = NULL, num.rule.max = 25)
 }
 \arguments{
-\item{sirus.cv.grid}{Cross-validation results returned by sirus.cv.}
+\item{sirus.cv.grid}{Cross-validation results returned by \code{\link{sirus.cv}}.}
 
-\item{p0.criterion}{Criterion to pick optimal p0 to display on plots: 'pred' to maximize accuracy and 'stab' for a tradeoff stability/accuracy. Default is 'stab' for regression and 'pred' for classification.}
+\item{p0.criterion}{Criterion to pick the optimal \code{p0} displayed in the plots: if 'pred' then \code{p0.pred} is used for a minimal error, if 'stab' then \code{p0.stab} is used for a tradeoff error/stability. Default is 'pred' for classification and 'stab' for regression.}
 
 \item{num.rule.max}{Upper limit on the number of rules for the x-axis. Default is 25.}
 }
 \value{
 Plots of cross-validation results.
-  \item{\code{error}}{plot of error vs number of rules (ggplot object).}
-  \item{\code{stab}}{plot of stability vs number of rules (ggplot object).}
+  \item{\code{error}}{plot of error vs number of rules (ggplot2 object).}
+  \item{\code{stability}}{plot of stability vs number of rules (ggplot2 object).}
 }
 \description{
-Plot SIRUS cross-validation path: error and stability versus the number of rules when p0 varies.
+Plot SIRUS cross-validation path: error and stability versus the number of rules when \code{p0} varies.
+}
+\details{
+Error is 1-AUC for classification and the unexplained variance for regression.
+Stability is the average proportion of rules shared by two SIRUS models fit on two distinct folds of the cross-validation.
 }
 \examples{
-## load sirus
+## load SIRUS
 require(sirus)
 
 ## prepare data

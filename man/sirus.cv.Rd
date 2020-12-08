@@ -2,38 +2,55 @@
 % Please edit documentation in R/sirus.R
 \name{sirus.cv}
 \alias{sirus.cv}
-\title{Estimation of p0.}
+\title{Estimate p0.}
 \usage{
-sirus.cv(data, y, type = "auto", nfold = 10, ncv = NULL,
-  num.rule.max = 25, q = 10, num.trees.step = 1000, alpha = 0.05,
-  mtry = NULL, max.depth = 2, num.trees = NULL, num.threads = NULL,
-  replace = TRUE, sample.fraction = NULL, verbose = TRUE,
-  seed = NULL)
+sirus.cv(
+  data,
+  y,
+  type = "auto",
+  nfold = 10,
+  ncv = 10,
+  num.rule.max = 25,
+  q = 10,
+  discrete.limit = 10,
+  num.trees.step = 1000,
+  alpha = 0.05,
+  mtry = NULL,
+  max.depth = 2,
+  num.trees = NULL,
+  num.threads = NULL,
+  replace = TRUE,
+  sample.fraction = NULL,
+  verbose = TRUE,
+  seed = NULL
+)
 }
 \arguments{
-\item{data}{Input dataframe, each row is an observation vector.}
+\item{data}{Input dataframe, each row is an observation vector. Each column is an input variable and is numeric or factor.}
 
-\item{y}{Numeric response variable. For classification, y takes only 0 and 1 values.}
+\item{y}{Numeric response variable. For classification, \code{y} takes only 0 and 1 values.}
 
-\item{type}{'reg' for regression, 'classif' for classification and 'auto' for automatic detection (classification if y takes only 0 and 1 values).}
+\item{type}{'reg' for regression, 'classif' for classification and 'auto' for automatic detection (classification if \code{y} takes only 0 and 1 values).}
 
 \item{nfold}{Number of folds in the cross-validation. Default is 10.}
 
-\item{ncv}{Number of repetitions of the cross-validation. Default is 10 for regression and 30 for classification.}
+\item{ncv}{Number of repetitions of the cross-validation. Default is 10 for a robust estimation of \code{p0}.}
 
 \item{num.rule.max}{Maximum number of rules of SIRUS model in the cross-validation grid. Default is 25.}
 
-\item{q}{Number of quantiles used for node splitting in the forest construction. Default is 10.}
+\item{q}{Number of quantiles used for node splitting in the forest construction. Default and recommended value is 10.}
 
-\item{num.trees.step}{Number of trees grown between two evaluations of the stopping criterion. Ignored if num.trees is provided.}
+\item{discrete.limit}{Maximum number of distinct values for a variable to be considered discrete. If higher, variable is continuous.}
 
-\item{alpha}{Parameter of the stopping criterion for the number of trees: stability has to reach 1 - alpha to stop the growing of the forest. Ignored if num.trees is provided.}
+\item{num.trees.step}{Number of trees grown between two evaluations of the stopping criterion. Ignored if \code{num.trees} is provided.}
+
+\item{alpha}{Parameter of the stopping criterion for the number of trees: stability has to reach 1-\code{alpha} to stop the growing of the forest. Ignored if \code{num.trees} is provided. Default value is 0.05.}
 
 \item{mtry}{Number of variables to possibly split at each node. Default is the number of variables divided by 3.}
 
-\item{max.depth}{Maximal tree depth. Default and strongly recommanded value is 2.}
+\item{max.depth}{Maximal tree depth. Default and recommended value is 2.}
 
-\item{num.trees}{Number of trees grown in the forest. If NULL (recommanded), the number of trees is automatically set using a stability stopping criterion.}
+\item{num.trees}{Number of trees grown in the forest. If NULL (recommended), the number of trees is automatically set using a stability stopping criterion.}
 
 \item{num.threads}{Number of threads used to grow the forest. Default is number of CPUs available.}
 
@@ -46,18 +63,25 @@ sirus.cv(data, y, type = "auto", nfold = 10, ncv = NULL,
 \item{seed}{Random seed. Default is NULL, which generates the seed from R. Set to 0 to ignore the R seed.}
 }
 \value{
-Optimal value of p0 with the elements
-  \item{\code{p0.pred}}{Optimal p0 value to maximize model accuracy.}
-  \item{\code{p0.stab}}{Optimal p0 value for a tradeoff between stability and accuracy.}
-  \item{\code{error.grid.p0}}{Table with the full cross-validation results for a fine grid of p0: number of rules, stability, error.}
+Optimal value of \code{p0} with the elements
+  \item{\code{p0.pred}}{Optimal \code{p0} value to minimize model error (recommended for classification).}
+  \item{\code{p0.stab}}{Optimal \code{p0} value for a tradeoff between error and stability (recommended for regression).}
+  \item{\code{error.grid.p0}}{Table with the full cross-validation results for a fine grid of \code{p0}: number of rules, stability, and error. 
+                              The last three columns of the table are the standard deviations of the metrics across the \code{ncv} repetitions of the cross-validation.
+                              See details for the definitions of the error and stability metrics.}
   \item{\code{type}}{'reg' for regression, 'classif' for classification.}
 }
 \description{
-Estimation by cross-validation of the hyperparameter p0 used to select rules in sirus.fit.
-For a robust estimation, it is recommanded to run multiple cross-validations.
+Estimate the optimal hyperparameter \code{p0} used to select rules in \code{\link{sirus.fit}} using cross-validation (Benard et al. 2019, 2020).
+}
+\details{
+For a robust estimation of \code{p0}, it is recommended to run multiple cross-validations (typically \code{ncv} = 10).
+Two optimal values of \code{p0} are provided: \code{p0.pred} (Benard et al. 2019) and \code{p0.stab} (Benard et al. 2020), defined such that \code{p0.pred} minimizes the error, and \code{p0.stab} finds a tradeoff between error and stability.
+Error is 1-AUC for classification and the unexplained variance for regression.
+Stability is the average proportion of rules shared by two SIRUS models fit on two distinct folds of the cross-validation.
 }
 \examples{
-## load sirus
+## load SIRUS
 require(sirus)
 
 ## prepare data
@@ -69,4 +93,10 @@ data$Species <- NULL
 ## run cv
 cv.grid <- sirus.cv(data, y, nfold = 3, ncv = 2, num.trees = 100)
 
+}
+\references{
+\itemize{
+  \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2019). SIRUS: Stable and Interpretable RUle Set for Classification. arXiv preprint arXiv:1908.06852. \url{https://arxiv.org/abs/1908.06852}.
+  \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2020). Interpretable Random Forests via Rule Extraction. arXiv preprint arXiv:2004.14841. \url{https://arxiv.org/abs/2004.14841}.
+}
 }

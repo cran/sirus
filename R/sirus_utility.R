@@ -12,24 +12,53 @@ stabilityMetric <- function(numTrees, proba){
 }
 
 # bin variable with empirical q-quantiles
-get.quantiles.emp <- function(X, q){
-  quantiles.emp <- quantile(X, probs = seq(0,1,1/q))
-  names(quantiles.emp) <- NULL
-  return(list(quantiles.emp))
-}
-get.X.bin <- function(X, breaks){
-  q <- length(breaks) - 1
-  max.bool <- breaks[q] == breaks[q+1]
-  breaks <- unique(breaks)
-  if (length(breaks) >= 2 & !all(X %in% c(0,1))){
-    X.bin <- cut(as.numeric(X), breaks = breaks, labels = FALSE, right = FALSE)
-    if (max.bool){
-      X.bin[is.na(X.bin)] <- length(breaks)
+get.bins <- function(X, y, q, discrete.limit){
+  bins <- list()
+  if (is.numeric(X)){
+    values <- unique(X)
+    if (length(values) > discrete.limit){
+      # continuous variable
+      bins$type <- 'continuous'
+      bins$cut.values <- quantile(X, probs = seq(0,1,1/q))
+      names(bins$cut.values) <- NULL
     }else{
-      X.bin[is.na(X.bin)] <- length(breaks) - 1
+      # discrete variable
+      bins$type <- 'discrete'
+      bins$cut.values <- sort(values)
     }
-  }else{
-    X.bin <- X
+  }
+  if (is.factor(X)){
+    # categorical variable
+    bins$type <- 'categorical'
+    levels.order <- order(sapply(levels(X), function(level){
+      mean(y[X == level])
+    }))
+    bins$levels <- levels(X)[levels.order]
+  }
+  return(bins)
+}
+binarize.X <- function(X, bins, q){
+  # continuous and discrete variables
+  if (bins$type %in% c('continuous', 'discrete')){
+    breaks <- bins$cut.values
+    cut.on.max <- (diff(breaks[length(breaks) + -1:0]) == 0 || bins$type == 'discrete') # cuts on maximum values are possible only for discrete variables
+    breaks <- unique(breaks)
+    if (length(breaks) >= 2){
+      X.bin <- cut(as.numeric(X), breaks = breaks, labels = FALSE, right = FALSE)
+      if (cut.on.max){
+        X.bin[is.na(X.bin)] <- length(breaks)
+      }else{
+        X.bin[is.na(X.bin)] <- length(breaks) - 1
+      }
+    }else{
+      # constant variable
+      X.bin <- rep(1, length(X))
+    }
+  }
+  # categorical variable
+  if (bins$type == 'categorical'){
+    X.bin <- factor(X, bins$levels) # order levels
+    X.bin <- as.numeric(X.bin) # transform categorical in ordered variables
   }
   return(X.bin)
 }
@@ -187,13 +216,15 @@ paths.filter.2 <- function(paths, proba, num.rule){
             bool.double <- sapply(split.gen, function(split){
               all(sapply(split, function(x){list(x) %in% split.ind})) & length(split) == 1
             })
-            split.gen.temp2 <- lapply(split.gen[bool.double], function(split){
-              split.diff <- setdiff(split.ind, split)
-              if (length(split.diff) > 0){
-                split.diff
-              }
-            })
-            split.gen.temp <- c(split.gen.temp, split.gen.temp2)
+            if (length(bool.double) > 0){
+              split.gen.temp2 <- lapply(split.gen[bool.double], function(split){
+                split.diff <- setdiff(split.ind, split)
+                if (length(split.diff) > 0){
+                  split.diff
+                }
+              })
+              split.gen.temp <- c(split.gen.temp, split.gen.temp2)
+            }
           }
         }
         
@@ -233,10 +264,10 @@ paths.filter.d <- function(paths, proba, num.rule, data.bin){
   paths.ftr <- list()
   proba.ftr <- list()
   ind.batch <- 0
-  nsample <- 5*num.rule
+  nsample <- 10*num.rule
   
   # generate independent data
-  values <- apply(data.bin, 2, unique)
+  values <- lapply(1:nvar, function(j){unique(data.bin[,j])})
   data.indep <- sapply(values, function(x){sample(x, size = nsample, replace = T)})
   
   while (nrule < num.rule & ind.batch < nrule.max){
@@ -247,9 +278,7 @@ paths.filter.d <- function(paths, proba, num.rule, data.bin){
     proba.k <- proba[ind.batch + 1:nrule.batch]
     
     # get data.rule
-    path.supp <- sapply(paths.k, get.rule.supp.bin, data.bin = data.indep)
-    data.rule.b <- matrix(rep(0, nrule.batch*nsample), ncol = nrule.batch)
-    data.rule.b[path.supp] <- 1 
+    data.rule.b <- sapply(paths.k, get.rule.support.from.bin, data.bin = data.indep)
     if (ind.batch == 0){
       ind.sel <- c(1)
       data.rule <- cbind(rep(1, nsample), data.rule.b)
@@ -262,13 +291,13 @@ paths.filter.d <- function(paths, proba, num.rule, data.bin){
     ind.path <- list()
     for (ind in (nrule + 1):ncol(data.rule)){
       ind.sel <- c(ind.sel, ind)
-      data.rule.temp <- data.rule[,ind.sel]
+      data.rule.temp <- data.rule[, ind.sel, drop = F]
       rk.diff <- length(ind.sel) - rankMatrix(data.rule.temp)[1]
       rk.diff
       if (rk.diff > 0){ind.sel <- head(ind.sel, -1)}
     }
     
-    data.rule <- data.rule[,ind.sel]
+    data.rule <- data.rule[, ind.sel, drop = F]
     if (ind.batch == 0){ind.path <- ind.sel - nrule}else{ind.path <- ind.sel - nrule - 1}
     ind.path <- ind.path[ind.path > 0]
     paths.ftr <- c(paths.ftr, paths.k[unlist(ind.path)])
@@ -285,77 +314,104 @@ paths.filter.d <- function(paths, proba, num.rule, data.bin){
   
 }
 
-# recover rule from path
-get.rule <- function(path, quantiles.emp, data.names){
+# format path
+format.path <- function(path, bins.list){
   lapply(path, function(split){
-    var.name <- data.names[split[1]]
-    breaks <- unique(quantiles.emp[[split[1]]][[1]])
-    is.cat <- if(length(breaks)==2){all(breaks == c(0,1))}else{FALSE}
-    if (is.cat){
-      sign <- '='
-      split.value <- split[3]
-    }else{
-      sign <- if(split[3]==0){'<'}else{'>='}
-      split.value <- breaks[ceiling(split[2])]
+    bins <- bins.list[[split[1]]]
+    if (bins$type %in% c('continuous', 'discrete')){
+      # continuous and discrete variables
+      breaks <- bins$cut.values
+      split[2] <- min(which(breaks == unique(breaks)[ceiling(split[2])])) - 1
+      split[3] <- if(split[3] == 0){'L'}else{'R'}
+      split[4] <- breaks[as.numeric(split[2]) + 1]
     }
-    rule <- c(var.name, sign, split.value)
+    if (bins$type == 'categorical'){
+      # categorical variables
+      if (split[3] == 0){
+        split <- c(split[1], '=', sort(bins$levels[1:floor(as.numeric(split[2]))]))
+      }else{
+        split <- c(split[1], '=', sort(bins$levels[ceiling(as.numeric(split[2])):length(bins$levels)]))
+      }
+    }
+    return(split)
   })
 }
 
-# get rule output
-get.rule.supp <- function(rule, data){
-  rule.supp <- sapply(rule, function(split) {
-    if (split[2] == '<'){
-      split.supp <- (data[,split[1]] < as.numeric(split[3]))
+# recover rule from path
+get.rule <- function(path, bins.list, data.names){
+  lapply(path, function(split){
+    var.name <- data.names[as.numeric(split[1])]
+    split.type <- bins.list[[as.numeric(split[1])]]$type
+    if (split.type %in% c('continuous', 'discrete')){
+      if(split[3]=='L'){sign <- '<'}
+      if(split[3]=='R'){sign <- '>='}
+      split.value <- split[4]
+      rule <- c(var.name, sign, split.value)
     }
-    if (split[2] == '>='){
-      split.supp <- (data[,split[1]] >= as.numeric(split[3]))
+    if (split.type %in% c('categorical')){
+      rule <- split
+      rule[1] <- var.name
     }
-    if (split[2] == '='){
-      split.supp <- (data[,split[1]] == split[3])
-    }
-    return(split.supp)
+    rule
   })
-  if (nrow(data) > 1){
-    rule.supp <- apply(rule.supp, 1, all)
-  }else{
-    rule.supp <- all(rule.supp)
-  }
-  return(rule.supp)
 }
-get.rule.supp.bin <- function(path, data.bin){
-  rule.supp <- sapply(path, function(split) {
+
+# get rule outputs
+get.rule.support.from.bin <- function(path, data.bin){
+  splits <- sapply(path, function(split){
+    X <- data.bin[, split[1]]
     if (split[3] == 0){
-      data.bin[,split[1]] < split[2]
-    }else{
-      data.bin[,split[1]] > split[2]
+      X <- X < split[2]
     }
+    if (split[3] == 1){
+      X <- X >= split[2]
+    }
+    X
   })
-  rule.supp <- apply(rule.supp, 1, all)
-  return(rule.supp)
+  apply(splits, 1, prod)
 }
-get.rule.outputs <- function(path, data.bin, y){
-  rule.supp <- get.rule.supp.bin(path, data.bin)
-  supp.size <- sum(rule.supp)
-  supp.size <- c(supp.size, length(rule.supp) - supp.size)
-  rule.out <- c(mean(y[rule.supp]), mean(y[!rule.supp]))
-  list(outputs = rule.out, supp.size = supp.size)
+get.rule.support <- function(data, rules){  
+  as.data.frame(sapply(rules, function(rule){
+    Z <- sapply(rule, function(split){
+      X <- data[,split[1]]
+      if (is.numeric(X)){
+        if (split[2] == '<'){
+          Z <- X < as.numeric(split[3])
+        }
+        if (split[2] == '>='){
+          Z <- X >= as.numeric(split[3])
+        }
+      }
+      if (is.factor(X)){
+        Z <- X %in% split[3:length(split)]
+      }
+      Z
+    })
+    apply(Z, 1, all)
+  }))
+}
+get.rule.outputs <- function(data.rule.supp, y){
+  lapply(1:ncol(data.rule.supp), function(j){
+    Z <- data.rule.supp[, j]
+    outputs <- c(mean(y[Z == 1]), mean(y[Z == 0]))
+    supp.size <- c(sum(Z), sum(1 - Z))
+    list(outputs = outputs, supp.size = supp.size)
+  })
 }
 
 # transform data
 get.data.rule <- function(data, rules, rules.out){
+  rules.bool <- get.rule.support(data, rules)
   ndata <- nrow(data)
-  rules.bool <- sapply(rules, get.rule.supp, data = data)
   data.rule <- sapply(1:length(rules), function(ind) {
     if (ndata > 1){
       rule.out <- rep(rules.out[[ind]]$outputs[2], ndata)
       rule.out[rules.bool[,ind]] <- rules.out[[ind]]$outputs[1]
-      rule.out
     }else{
-      rules.out <- if(rules.bool[ind]){rules.out[[ind]]$outputs[1]}else{rules.out[[ind]]$outputs[2]}
+      rule.out <- if(rules.bool[ind]){rules.out[[ind]]$outputs[1]}else{rules.out[[ind]]$outputs[2]}
     }
+    rule.out
   })
-  data.rule <- matrix(data.rule, ncol = length(rules))
   return(data.rule)
 }
 
@@ -371,13 +427,14 @@ data.check <- function(data){
       stop('Invalid data. data is empty.')
     }
   }
-  # check data is numeric
-  is.num <- sapply(1:ncol(data), function(ind){is.numeric(data[,ind])})
-  if (!all(is.num)){
-    offending_columns <- colnames(data)[!is.num]
-    stop("Invalid data. Non-numeric data in columns: ",
-         paste0(offending_columns, collapse = ", "), ". ", 
-         "Use one hot encoding for categorical variables.", call. = FALSE)
+  # check data is either numeric or factor
+  is.type <- sapply(1:ncol(data), function(ind){
+    is.numeric(data[,ind]) || is.factor(data[,ind])
+  })
+  if (!all(is.type)){
+    offending_columns <- colnames(data)[!is.type]
+    stop("Invalid data. Variable types have to be numeric or factor. Not the case for columns: ",
+         paste0(offending_columns, collapse = ", "), ". ", call. = FALSE)
   }
   # check missing values
   if (any(is.na(data))) {
@@ -404,7 +461,11 @@ data.y.check <- function(data, y){
   if (!dim.valid){
     stop('Invalid data and y. data and y should have compatible dimensions.')
   }
-  
+  # check sample size
+  size.valid <- nrow(data) > 5
+  if (!size.valid){
+    warning('Small sample size. At least 6 data points are required to return a non-empty rule list.')
+  }
   
 }
 
@@ -459,12 +520,14 @@ sirus.model.check <- function(sirus.m){
   sirus.valid <- FALSE
   type.valid <- is.list(sirus.m)
   if (type.valid){
-    names.valid <- all(names(sirus.m) == c('rules', 'rules.out', 'proba', 'paths', 'num.trees', 'mean', 'type',
-                                           'rule.weights', 'rule.glm', 'data.names'))
+    names.valid <- all(names(sirus.m) == c('rules', 'rules.out', 'proba', 'paths', 
+                      'rule.weights', 'rule.glm', 'type', 'num.trees', 'data.names', 'mean', 'bins'))
     if (names.valid){
       rules.valid <- all(sapply(sirus.m$rules, function(rule){
         is.list(rule) & 
-        all(sapply(rule, function(split){length(split) == 3}))
+        all(sapply(rule, function(split){
+          if (split[2] == '='){length(split) >= 3}else{length(split) == 3}
+        }))
       }))
       rules.out.valid <- all(sapply(sirus.m$rules.out, function(rule.out){
         is.list(rule.out) &

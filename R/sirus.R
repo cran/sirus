@@ -1,23 +1,47 @@
 #'
-#' Fit a SIRUS model for a given number of rules (10 by default) or a given p0.
-#' If the output y takes only 0 and 1 values a classification model is fit, otherwise a regression model is fit.
-#' The number of trees is tuned automatically with a stopping criterion based on stability.
-#' The hyperparameter p0 can be tuned using sirus.cv.
+#' Fit SIRUS for a given number of rules (10 by default) or a given \code{p0}. \cr
+#' SIRUS is a regression and classification algorithm, based on random forests (Breiman, 2001), that takes the form of a short list of rules.
+#' SIRUS combines the simplicity of rule algorithms or decision trees with an accuracy close to random forests.
+#' More importantly, the rule selection is stable with respect to data perturbation.
+#' SIRUS for classification is defined in (Benard et al. 2019), and the extension to regression is provided in (Benard et al. 2020).
+#' 
+#' If the output \code{y} takes only 0 and 1 values, a classification model is fit, otherwise a regression model is fit.
+#' SIRUS algorithm proceeds the following steps:
+#' \enumerate{
+#'   \item Discretize data
+#'   \item Fit a random forest
+#'   \item Extract rules from tree nodes
+#'   \item Select the most frequent rules (which occur in at least a fraction p0 of the trees)
+#'   \item Filter rules to remove linear dependence between them
+#'   \item Aggregate the selected rules
+#'      \itemize{
+#'         \item Classification: rules are averaged
+#'         \item Regression: rules are linearly combined via a ridge regression (constrained to have all coefficients positive)
+#'      }
+#' }
+#' The hyperparameter \code{p0} can be tuned using \code{\link{sirus.cv}} to set the optimal number of rules. \cr
+#' The number of trees is automatically set with a stopping criterion based on stability: 
+#' the forest growing is stopped when the number of trees is high enough to ensure that 95\% of the rules in average are identical over two runs of SIRUS on the provided dataset. \cr
+#' Data is discretized depending on variable types: numerical variables are binned using \code{q}-quantiles, 
+#' categorical variables are transformed in ordered variables as in \code{\link[ranger]{ranger}} (standard method to handle categorical variables in trees),
+#' while discrete variables (numerical variables with less than \code{discrete.limit} distinct values) are left untouched.
+#' Notice that categorical variables with a high number of categories should be discarded or transformed, as SIRUS is likely to identify associated irrelevant rules.
 #'
 #' @title Fit SIRUS.
 #'
-#' @param data Input dataframe, each row is an observation vector.
-#' @param y Numeric response variable. For classification, y takes only 0 and 1 values.
-#' @param type 'reg' for regression, 'classif' for classification and 'auto' for automatic detection (classification if y takes only 0 and 1 values).
-#' @param num.rule Number of rules in SIRUS model. Default is 10. Ignored if a p0 value is provided. For regression, the effective number of rules can be smaller than num.rule because of the additional selection in the final linear aggregation of the rules.
-#' @param p0 Selection threshold on the frequency of appearance of a path in the forest. Default is NULL and num.rule is used to select rules.
-#' @param num.rule.max Maximum number of rules in SIRUS model. Ignored if num.rule is provided.
-#' @param q Number of quantiles used for node splitting in the forest construction.
-#' @param num.trees.step Number of trees grown between two evaluations of the stopping criterion. Ignored if num.trees is provided.
-#' @param alpha Parameter of the stopping criterion for the number of trees: stability has to reach 1 - alpha to stop the growing of the forest. Ignored if num.trees is provided.
+#' @param data Input dataframe, each row is an observation vector. Each column is an input variable and is numeric or factor.
+#' @param y Numeric response variable. For classification, \code{y} takes only 0 and 1 values.
+#' @param type 'reg' for regression, 'classif' for classification and 'auto' for automatic detection (classification if \code{y} takes only 0 and 1 values).
+#' @param num.rule Number of rules in SIRUS model. Default is 10. Ignored if a \code{p0} value is provided. For regression, the effective number of rules can be smaller than \code{num.rule} because of null coefficients in the final linear aggregation of the rules.
+#' @param p0 Selection threshold on the frequency of appearance of a path in the forest to set the number of rules. Default is NULL and \code{num.rule} is used to select rules. \code{\link{sirus.cv}} provides the optimal \code{p0} by cross-validation.  
+#' @param num.rule.max Maximum number of rules in SIRUS model. Ignored if \code{num.rule} is provided.
+#' @param q Number of quantiles used for node splitting in the forest construction. Default and recommended value is 10.
+#' @param discrete.limit Maximum number of distinct values for a variable to be considered discrete. If higher, variable is continuous.
+#' @param num.trees.step Number of trees grown between two evaluations of the stopping criterion. Ignored if \code{num.trees} is provided.
+#' @param alpha Parameter of the stopping criterion for the number of trees: stability has to reach 1-\code{alpha} to stop the growing of the forest. Ignored if \code{num.trees} is provided. Default value is 0.05.
 #' @param mtry Number of variables to possibly split at each node. Default is the number of variables divided by 3.
-#' @param max.depth Maximal tree depth. Default and strongly recommanded value is 2.
-#' @param num.trees Number of trees grown in the forest. Default is NULL. If NULL (recommanded), the number of trees is automatically set using a stability based stopping criterion.
+#' @param max.depth Maximal tree depth. Default and recommended value is 2.
+#' @param num.trees Number of trees grown in the forest. Default is NULL. If NULL (recommended), the number of trees is automatically set using a stability based stopping criterion.
 #' @param num.threads Number of threads used to grow the forest. Default is number of CPUs available.
 #' @param replace Boolean. If true (default), sample with replacement.
 #' @param sample.fraction Fraction of observations to sample. Default is 1 for sampling with replacement and 0.632 for sampling without replacement.
@@ -26,14 +50,20 @@
 #' 
 #' @return SIRUS model with elements
 #'   \item{\code{rules}}{List of rules in SIRUS model.}
-#'   \item{\code{rules.out}}{List of rule outputs. rule.out: the output mean whether the rule is satisfied or not. supp.size: the number of points inside and outside the rule.}
+#'   \item{\code{rules.out}}{List of rule outputs. \code{rule.out}: the output mean whether the rule is satisfied or not. \code{supp.size}: the number of points inside and outside the rule.}
 #'   \item{\code{proba}}{Frequency of occurence of paths in the forest.}
-#'   \item{\code{paths}}{List of selected paths.}
+#'   \item{\code{paths}}{List of selected paths (symbolic representation with quantile order for continuous variables).}
+#'   \item{\code{rule.weights}}{Vector of positive or null coefficients assigned to each rule for the linear aggregation (1/number of rules for classification).}
+#'   \item{\code{rule.glm}}{Fitted glmnet object for regression (linear rule aggregation with ridge penalty).}
+#'   \item{\code{type}}{Type of SIRUS model: 'reg' for regression, 'classif' for classification.} 
+#'   \item{\code{num.trees}}{Number of trees used to build SIRUS.}
+#'   \item{\code{data.names}}{Names of input variables.}
 #'   \item{\code{mean}}{Mean output over the full training data. Default model output if no rule is selected.}
+#'   \item{\code{bins}}{List of type and possible split values for all input variables.}
 #' @export
 #'
 #' @examples
-#' ## load sirus
+#' ## load SIRUS
 #' require(sirus)
 #'
 #' ## prepare data
@@ -42,10 +72,16 @@
 #' y[data$Species == 'setosa'] = 1
 #' data$Species <- NULL
 #'
-#' ## fit sirus
+#' ## fit SIRUS
 #' sirus.m <- sirus.fit(data, y)
 #'
-#'
+#' @references
+#' \itemize{
+#'   \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2019). SIRUS: Stable and Interpretable RUle Set for Classification. arXiv preprint arXiv:1908.06852. \url{https://arxiv.org/abs/1908.06852}.
+#'   \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2020). Interpretable Random Forests via Rule Extraction. arXiv preprint arXiv:2004.14841. \url{https://arxiv.org/abs/2004.14841}. 
+#'   \item Breiman, L. (2001). Random forests. Machine learning, 45, 5-32.
+#'   \item Wright, M. N. & Ziegler, A. (2017). ranger: A fast implementation of random forests for high dimensional data in C++ and R. J Stat Softw 77:1-17. \url{https://doi.org/10.18637/jss.v077.i01}.
+#' }
 #' @encoding UTF-8
 #' @useDynLib sirus
 #' @importFrom Rcpp evalCpp
@@ -56,15 +92,15 @@
 #' @import ROCR
 #' @import ggplot2
 #' @import glmnet
-sirus.fit <- function(data, y, type = 'auto', num.rule = 10, p0 = NULL, num.rule.max = 25, q = 10,
-                      num.trees.step = 1000, alpha = 0.05, mtry = NULL, max.depth = 2, num.trees = NULL,
-                      num.threads = NULL, replace = TRUE, sample.fraction = ifelse(replace, 1, 0.632),
-                      verbose = TRUE, seed = NULL) {
+sirus.fit <- function(data, y, type = 'auto', num.rule = 10, p0 = NULL, num.rule.max = 25, q = 10, 
+                      discrete.limit = 10, num.trees.step = 1000, alpha = 0.05, mtry = NULL,
+                      max.depth = 2, num.trees = NULL, num.threads = NULL, replace = TRUE,
+                      sample.fraction = ifelse(replace, 1, 0.632), verbose = TRUE, seed = NULL) {
 
   # Check arguments
   # check data type
   data.y.check(data, y)
-  # check sirus parameters
+  # check SIRUS parameters
   sirus.param.check(data, num.rule.max, q, num.trees.step, alpha, mtry)
   # check num.rule
   num.rule.valid <- is.numeric(num.rule)
@@ -92,7 +128,7 @@ sirus.fit <- function(data, y, type = 'auto', num.rule = 10, p0 = NULL, num.rule
   # set default mtry
   if (is.null(mtry)){
     mtry.ratio <- 1/3
-    mtry <- floor((ncol(data))*mtry.ratio)
+    mtry <- max(1, floor((ncol(data))*mtry.ratio))
   }
   # set type
   type.valid <- type %in% c('auto', 'reg', 'classif')
@@ -113,103 +149,127 @@ sirus.fit <- function(data, y, type = 'auto', num.rule = 10, p0 = NULL, num.rule
   }else{
     stop('Invalid type. Type should be auto, reg (for regression) or classif (for classification).')
   }
-  
 
-  # Data binning
+  # Data info
   data.names <- colnames(data)
-  quantiles.emp <- apply(data, 2, get.quantiles.emp, q = q)
-  data.bin <- sapply(1:ncol(data), function(ind){
-    get.X.bin(data[,ind], quantiles.emp[[ind]][[1]])
-  })
-  colnames(data.bin) <- data.names
-  data.bin.y <- as.data.frame(cbind(data.bin, y))
-
-  # Grow forest
-  forest <- ranger.stab(data.bin.y, num.trees.step, alpha, mtry, max.depth, num.trees, num.threads, replace,
-                        sample.fraction, verbose, seed)
-  paths <- forest$paths[-1]
-  proba <- forest$proba[-1]
-  num.trees <- forest$num.trees
-
-  # path selection with p0
-  if (!is.null(p0)) {
-    selector <- proba > p0
-    paths <- paths[selector]
-    proba <- proba[selector]
-    num.rule <- num.rule.max
-  }
-
-  # path post-treatment
-  paths <- lapply(paths, function(path){
-    lapply(path, function(split){
-      if (split[2] == round(split[2])){
-        split[2] <- split[2] - 0.5
-      }
-      split
-    })
-  })
-  if (max.depth <= 2){
-    paths.ftr <- paths.filter.2(paths, proba, num.rule)
-  }else{
-    paths.ftr <- paths.filter.d(paths, proba, num.rule, data.bin)
-  }
-  paths <- paths.ftr$paths
-  proba <- paths.ftr$proba
-
-  # recover rule constraints from paths
-  rules <- lapply(paths, get.rule, quantiles.emp = quantiles.emp, data.names = data.names)
-
-  # rule outputs
-  rules.out <- lapply(paths, get.rule.outputs, data.bin = data.bin, y = y)
   mean.out <- mean(y)
-
-  # format paths
-  paths <- lapply(paths, function(path){
-    lapply(path, function(split){
-      quantiles <- quantiles.emp[[split[1]]][[1]]
-      quantiles.dedup <- unique(quantiles)
-      is.cat <- if(length(quantiles.dedup)==2){all(quantiles.dedup == c(0,1))}else{FALSE}
-      if (is.cat){
-        split[2] <- split[3]
-        split[3] <- '='
-      }else{
-        split.value <- quantiles.dedup[ceiling(split[2])]
-        split[2] <- min(which(quantiles == split.value)) - 1
-        split[3] <- if(split[3]==0){'L'}else{'R'}
-      }
-      return(split)
-    })
-  })
   
-  # for regreesion: fit rule coefficients
-  if (type == 'reg' & length(paths) > 1){
-    data.rule <- get.data.rule(data, rules, rules.out)
-    lambda <- cv.glmnet(data.rule, y, lower.limits = rep(0, ncol(data.rule)),
-                        alpha = 0, standardize = F)$lambda.min
-    rule.glm <- glmnet(data.rule, y, lower.limits = rep(0, ncol(data.rule)),
-                        lambda = lambda, alpha = 0, standardize = F)
-    rule.weights <- as.vector(rule.glm$beta)
+  # Data binning
+  bins.list <- lapply(data, get.bins, y = y, q = q, discrete.limit = discrete.limit)
+  num.cat.valid <- sapply(bins.list, function(bins){
+    if (bins$type =='categorical'){length(bins$levels) < 0.05*nrow(data)}else{TRUE}
+  })
+  if (!all(num.cat.valid)){
+    names.warning <- paste0(data.names[!num.cat.valid], collapse = ', ')
+    warning(paste0('Some categorical variables have a high number of categories. 
+    SIRUS is likely to identify irrelevant rules, overfit, and to have long running times.
+    It is recommended to discard or transform these variables: ', names.warning, '.'))
+  }
+  data.bin <- as.data.frame(sapply(1:ncol(data), function(j){
+                              binarize.X(X = data[,j], bins = bins.list[[j]], q = q)}))
+  data.bin.y <- cbind(data.bin, y)
+
+  if (nrow(data) > 5){
+    # Grow forest
+    forest <- ranger.stab(data.bin.y, num.trees.step, alpha, mtry, max.depth, num.trees,
+                          num.threads, replace, sample.fraction, verbose, seed)
+    paths <- forest$paths[-1]
+    proba <- forest$proba[-1]
+    num.trees <- forest$num.trees
   }else{
-    rule.glm <- NULL
-    rule.weights <- rep(1/num.rule, num.rule)
+    warning('Minimum sample size to run SIRUS is 5.')
+    paths <- list()
+    proba <- 1
+    num.trees <- 0
   }
 
-  return(list(rules = rules, rules.out = rules.out, proba = proba, paths = paths, num.trees = num.trees,
-              mean = mean.out, type = type, rule.weights = rule.weights, rule.glm = rule.glm, data.names = data.names))
+  if (length(paths) > 0){
+    
+    # path selection with p0
+    if (!is.null(p0)) {
+      selector <- proba > p0
+      paths <- paths[selector]
+      proba <- proba[selector]
+      num.rule <- num.rule.max
+    }
+    
+    # path post-treatment
+    paths <- lapply(paths, function(path){
+      lapply(path, function(split){
+        if (split[2] == round(split[2])){
+          split[2] <- split[2] - 0.5
+        }
+        split
+      })
+    })
+    if (max.depth <= 2){
+      paths.ftr <- paths.filter.2(paths, proba, num.rule)
+    }else{
+      paths.ftr <- paths.filter.d(paths, proba, num.rule, data.bin)
+    }
+    paths <- paths.ftr$paths
+    proba <- paths.ftr$proba
+    
+    # format paths
+    paths <- lapply(paths, format.path, bins.list = bins.list)
+  
+    # build rules from paths
+    rules <- lapply(paths, get.rule, bins.list = bins.list, data.names = data.names)
+    data.rule.supp <- get.rule.support(data, rules)
+    rules.out <- get.rule.outputs(data.rule.supp, y)
+    
+    # symbolic paths
+    paths <- lapply(paths, function(path){lapply(path, function(split){
+                if (bins.list[[as.numeric(split[1])]]$type %in% c('continuous', 'discrete')){
+                  split <- split[1:3]}; return(split)})
+              })
+  
+    # for regreesion: fit rule coefficients
+    if (type == 'reg' & length(paths) > 1){
+      data.rule <- sapply(1:length(paths), function(j){
+        X <- data.rule.supp[, j]
+        X[X == 1] <- rules.out[[j]]$outputs[1]
+        X[X == 0] <- rules.out[[j]]$outputs[2]
+        X
+      })
+      lambda <- cv.glmnet(data.rule, y, lower.limits = rep(0, ncol(data.rule)),
+                          alpha = 0, standardize = F)$lambda.min
+      rule.glm <- glmnet(data.rule, y, lower.limits = rep(0, ncol(data.rule)),
+                          lambda = lambda, alpha = 0, standardize = F)
+      rule.weights <- as.vector(rule.glm$beta)
+    }else{
+      rule.glm <- NULL
+      rule.weights <- rep(1/num.rule, num.rule)
+    }
+    
+  }else{
+    
+    rules <- list()
+    rules.out <- list()
+    rule.glm <- NULL
+    rule.weights <- 1
+    
+  }
+
+  return(list(rules = rules, rules.out = rules.out, proba = proba, paths = paths,
+              rule.weights = rule.weights, rule.glm = rule.glm, type = type, 
+              num.trees = num.trees, data.names = data.names, mean = mean.out, bins = bins.list))
 
 }
 
 #'
 #' Print the list of rules output by SIRUS.
 #'
-#' @title Print SIRUS
-#' @param sirus.m A SIRUS model generated by sirus.fit.
+#' @title Print SIRUS.
+#'
+#' @param sirus.m A SIRUS model generated by \code{\link{sirus.fit}}.
+#' @param digits Number of significant digits for numerical values. Default value is 3.
 #'
 #' @return Formatted list of rules.
 #' @export
 #'
 #' @examples
-#' ## load sirus
+#' ## load SIRUS
 #' require(sirus)
 #'
 #' ## prepare data
@@ -218,60 +278,70 @@ sirus.fit <- function(data, y, type = 'auto', num.rule = 10, p0 = NULL, num.rule
 #' y[data$Species == 'setosa'] = 1
 #' data$Species <- NULL
 #'
-#' ## fit sirus
+#' ## fit SIRUS
 #' sirus.m <- sirus.fit(data, y)
 #'
 #' ## print sirus model
 #' sirus.print(sirus.m)
 #'
-sirus.print <- function(sirus.m){
+sirus.print <- function(sirus.m, digits = 3){
 
-  # check sirus.m is a valid sirus model
+  # check sirus.m is a valid SIRUS model
   sirus.m.valid <- sirus.model.check(sirus.m)
   if (!sirus.m.valid){
-    stop('Invalid sirus model.')
+    stop('Invalid SIRUS model.')
+  }
+  digits.valid <- is.numeric(digits) & digits > 0
+  if (!digits.valid){
+    stop('Invalid number of digits.')
   }
 
   rules <- sirus.m$rules
   rules.out <- sirus.m$rules.out
-  rule.weights <- sapply(sirus.m$rule.weights, signif, digits = 3)
+  rule.weights <- sapply(sirus.m$rule.weights, signif, digits = digits)
 
-  # format sirus output in a readable format
+  # format SIRUS output in a readable format
   if (length(rules) > 0){
     rules.print <- paste0(lapply(1:length(rules), function(ind) {
       rule <- rules[[ind]]
       rule.paste <- paste0(lapply(rule, function(split){
-        split[3] <- signif(as.numeric(split[3]), digits = 3)
-        paste0(split, collapse = ' ')
+        if (split[2] %in% c('<', '>=')){
+          split[3] <- signif(as.numeric(split[3]), digits = digits)
+          split.paste <- paste0(split, collapse = ' ')
+        }
+        if (split[2] == '='){
+          split.paste <- paste0(split[1], ' in {', paste0(split[3:length(split)], collapse = ', '), '}')
+        }
+        split.paste
       }), collapse = ' & ')
       rule.out <- rules.out[[ind]]
-      out.true <- signif(rule.out$outputs[1], digits = 3)
-      out.false <- signif(rule.out$outputs[2], digits = 3)
+      out.true <- signif(rule.out$outputs[1], digits = digits)
+      out.false <- signif(rule.out$outputs[2], digits = digits)
       size.true <- rule.out$supp.size[1]
       size.false <- rule.out$supp.size[2]
-      weight <- signif(rule.weights[ind], digits = 3)
+      weight <- signif(rule.weights[ind], digits = digits)
       paste0(c('if ', rule.paste, ' then ', out.true, ' (n=', size.true, ') else ', out.false, ' (n=', size.false, ')'), collapse = '')
     }))
     
     if (sirus.m$type == 'classif'){
-      mean.print <- paste('Proportion of class 1 =', signif(sirus.m$mean, digits = 3),
+      mean.print <- paste('Proportion of class 1 =', signif(sirus.m$mean, digits = digits),
                           '- Sample size n =', sum(rules.out[[1]]$supp.size))
       rules.print <- c(mean.print, rules.print)
     }else{
       rules.print <- rules.print[rule.weights > 0]
       rule.weights <- rule.weights[rule.weights > 0]
-      mean.print <- paste0('Mean of output y = ', signif(sirus.m$mean, digits = 3),
+      mean.print <- paste0('Mean of output y = ', signif(sirus.m$mean, digits = digits),
                           ' - Sample size n = ', sum(rules.out[[1]]$supp.size))
       rules.print <- c(mean.print, rules.print)
       if (length(rules) > 1){intercept <- sirus.m$rule.glm$a0}else{intercept <- 0}
-      intercept <- paste('Intercept =', signif(intercept, digits = 3))
+      intercept <- paste('Intercept =', signif(intercept, digits = digits))
       rule.weights <- c(intercept, rule.weights)
       rules.print <- cbind(rule.weights, rules.print)
       colnames(rules.print) <- c('Weights', 'Rules')
     }
     
   }else{
-    out <- signif(sirus.m$mean, digits = 3)
+    out <- signif(sirus.m$mean, digits = digits)
     rules.print <- paste0('Empty rule set. Constant output = ', out)
   }
 
@@ -279,17 +349,17 @@ sirus.print <- function(sirus.m){
 }
 
 #'
-#' Predictions of a SIRUS model for new observations.
+#' Compute SIRUS predictions for new observations.
 #'
-#' @title Predict
-#' @param sirus.m A SIRUS model generated by sirus.fit.
+#' @title Predict.
+#' @param sirus.m A SIRUS model generated by \code{\link{sirus.fit}}.
 #' @param data.test Testing data (dataframe of new observations).
 #'
 #' @return Predictions. For classification, vector of the predicted probability of each new observation to be of class 1.
 #' @export
 #'
 #' @examples
-#' ## load sirus
+#' ## load SIRUS
 #' require(sirus)
 #'
 #' ## prepare data
@@ -298,7 +368,7 @@ sirus.print <- function(sirus.m){
 #' y[data$Species == 'setosa'] = 1
 #' data$Species <- NULL
 #'
-#' #' ## fit sirus
+#' #' ## fit SIRUS
 #' sirus.m <- sirus.fit(data, y)
 #'
 #' ## predict
@@ -306,10 +376,10 @@ sirus.print <- function(sirus.m){
 #'
 sirus.predict <- function(sirus.m, data.test){
 
-  # check sirus.m is a valid sirus model
+  # check sirus.m is a valid SIRUS model
   sirus.m.valid <- sirus.model.check(sirus.m)
   if (!sirus.m.valid){
-    stop('Invalid sirus model.')
+    stop('Invalid SIRUS model.')
   }
   # check data.test
   data.check(data.test)
@@ -340,38 +410,45 @@ sirus.predict <- function(sirus.m, data.test){
 }
 
 #'
-#' Estimation by cross-validation of the hyperparameter p0 used to select rules in sirus.fit.
-#' For a robust estimation, it is recommanded to run multiple cross-validations.
+#' Estimate the optimal hyperparameter \code{p0} used to select rules in \code{\link{sirus.fit}} using cross-validation (Benard et al. 2019, 2020).
+#' 
+#' For a robust estimation of \code{p0}, it is recommended to run multiple cross-validations (typically \code{ncv} = 10).
+#' Two optimal values of \code{p0} are provided: \code{p0.pred} (Benard et al. 2019) and \code{p0.stab} (Benard et al. 2020), defined such that \code{p0.pred} minimizes the error, and \code{p0.stab} finds a tradeoff between error and stability.
+#' Error is 1-AUC for classification and the unexplained variance for regression.
+#' Stability is the average proportion of rules shared by two SIRUS models fit on two distinct folds of the cross-validation.
 #'
-#' @title Estimation of p0.
+#' @title Estimate p0.
 #'
-#' @param data Input dataframe, each row is an observation vector.
-#' @param y Numeric response variable. For classification, y takes only 0 and 1 values.
-#' @param type 'reg' for regression, 'classif' for classification and 'auto' for automatic detection (classification if y takes only 0 and 1 values).
+#' @param data Input dataframe, each row is an observation vector. Each column is an input variable and is numeric or factor.
+#' @param y Numeric response variable. For classification, \code{y} takes only 0 and 1 values.
+#' @param type 'reg' for regression, 'classif' for classification and 'auto' for automatic detection (classification if \code{y} takes only 0 and 1 values).
 #' @param nfold Number of folds in the cross-validation. Default is 10.
-#' @param ncv Number of repetitions of the cross-validation. Default is 10 for regression and 30 for classification.
+#' @param ncv Number of repetitions of the cross-validation. Default is 10 for a robust estimation of \code{p0}.
 #' @param num.rule.max Maximum number of rules of SIRUS model in the cross-validation grid. Default is 25.
-#' @param q Number of quantiles used for node splitting in the forest construction. Default is 10.
-#' @param num.trees.step Number of trees grown between two evaluations of the stopping criterion. Ignored if num.trees is provided.
-#' @param alpha Parameter of the stopping criterion for the number of trees: stability has to reach 1 - alpha to stop the growing of the forest. Ignored if num.trees is provided.
+#' @param q Number of quantiles used for node splitting in the forest construction. Default and recommended value is 10.
+#' @param discrete.limit Maximum number of distinct values for a variable to be considered discrete. If higher, variable is continuous.
+#' @param num.trees.step Number of trees grown between two evaluations of the stopping criterion. Ignored if \code{num.trees} is provided.
+#' @param alpha Parameter of the stopping criterion for the number of trees: stability has to reach 1-\code{alpha} to stop the growing of the forest. Ignored if \code{num.trees} is provided. Default value is 0.05.
 #' @param mtry Number of variables to possibly split at each node. Default is the number of variables divided by 3.
-#' @param max.depth Maximal tree depth. Default and strongly recommanded value is 2.
-#' @param num.trees Number of trees grown in the forest. If NULL (recommanded), the number of trees is automatically set using a stability stopping criterion.
+#' @param max.depth Maximal tree depth. Default and recommended value is 2.
+#' @param num.trees Number of trees grown in the forest. If NULL (recommended), the number of trees is automatically set using a stability stopping criterion.
 #' @param num.threads Number of threads used to grow the forest. Default is number of CPUs available.
 #' @param replace Boolean. If true (default), sample with replacement.
 #' @param sample.fraction Fraction of observations to sample. Default is 1 for sampling with replacement and 0.632 for sampling without replacement.
 #' @param verbose Boolean. If true, information messages are printed.
 #' @param seed Random seed. Default is NULL, which generates the seed from R. Set to 0 to ignore the R seed.
 #'
-#' @return Optimal value of p0 with the elements
-#'   \item{\code{p0.pred}}{Optimal p0 value to maximize model accuracy.}
-#'   \item{\code{p0.stab}}{Optimal p0 value for a tradeoff between stability and accuracy.}
-#'   \item{\code{error.grid.p0}}{Table with the full cross-validation results for a fine grid of p0: number of rules, stability, error.}
+#' @return Optimal value of \code{p0} with the elements
+#'   \item{\code{p0.pred}}{Optimal \code{p0} value to minimize model error (recommended for classification).}
+#'   \item{\code{p0.stab}}{Optimal \code{p0} value for a tradeoff between error and stability (recommended for regression).}
+#'   \item{\code{error.grid.p0}}{Table with the full cross-validation results for a fine grid of \code{p0}: number of rules, stability, and error. 
+#'                               The last three columns of the table are the standard deviations of the metrics across the \code{ncv} repetitions of the cross-validation.
+#'                               See details for the definitions of the error and stability metrics.}
 #'   \item{\code{type}}{'reg' for regression, 'classif' for classification.}
 #' @export
 #'
 #' @examples
-#' ## load sirus
+#' ## load SIRUS
 #' require(sirus)
 #'
 #' ## prepare data
@@ -383,10 +460,15 @@ sirus.predict <- function(sirus.m, data.test){
 #' ## run cv
 #' cv.grid <- sirus.cv(data, y, nfold = 3, ncv = 2, num.trees = 100)
 #'
-sirus.cv <- function(data, y, type = 'auto', nfold = 10, ncv = NULL, num.rule.max = 25, q = 10,
-                     num.trees.step = 1000, alpha = 0.05, mtry = NULL, max.depth = 2, num.trees = NULL,
-                     num.threads = NULL, replace = TRUE, sample.fraction = NULL,
-                     verbose = TRUE, seed = NULL){
+#' @references
+#' \itemize{
+#'   \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2019). SIRUS: Stable and Interpretable RUle Set for Classification. arXiv preprint arXiv:1908.06852. \url{https://arxiv.org/abs/1908.06852}.
+#'   \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2020). Interpretable Random Forests via Rule Extraction. arXiv preprint arXiv:2004.14841. \url{https://arxiv.org/abs/2004.14841}.
+#' }
+sirus.cv <- function(data, y, type = 'auto', nfold = 10, ncv = 10, num.rule.max = 25, q = 10,
+                     discrete.limit = 10, num.trees.step = 1000, alpha = 0.05, mtry = NULL,
+                     max.depth = 2, num.trees = NULL, num.threads = NULL, replace = TRUE, 
+                     sample.fraction = NULL, verbose = TRUE, seed = NULL){
 
   # check arguments
   data.y.check(data, y)
@@ -416,25 +498,21 @@ sirus.cv <- function(data, y, type = 'auto', nfold = 10, ncv = NULL, num.rule.ma
     stop('Invalid type. Type should be auto, reg (for regression) or classif (for classification).')
   }
   # check ncv
-  if (is.null(ncv)){
-    if (type == 'reg'){ncv <- 10}else{ncv <- 30}
+  ncv.valid <- is.numeric(ncv)
+  if (ncv.valid){ncv.valid <- (round(ncv) == ncv) & ncv >= 1}
+  if (!ncv.valid){
+    stop('Invalid ncv. Number of cross-validations has to be an integer greater than 1.')
   }else{
-    ncv.valid <- is.numeric(ncv)
-    if (ncv.valid){ncv.valid <- (round(ncv) == ncv) & ncv >= 1}
-    if (!ncv.valid){
-      stop('Invalid ncv. Number of cross-validations has to be an integer greater than 1.')
-    }else{
-      if (ncv == 1){
-        warning('Warning ncv: It is recommanded to run multiple cross-validations for a robust estimation of p0.')
-      }
+    if (ncv == 1){
+      warning('Warning ncv: It is recommended to run multiple cross-validations for a robust estimation of p0.')
     }
   }
-  # check sirus parameters
+  # check SIRUS parameters
   sirus.param.check(data, num.rule.max, q, num.trees.step, alpha, mtry)
   # set default mtry
   if (is.null(mtry)){
     mtry.ratio <- 1/3
-    mtry <- floor((ncol(data))*mtry.ratio)
+    mtry <- max(1, floor((ncol(data))*mtry.ratio))
   }else{
     mtry.ratio <- mtry/ncol(data)
   }
@@ -474,19 +552,26 @@ sirus.cv <- function(data, y, type = 'auto', nfold = 10, ncv = NULL, num.rule.ma
       num.rule.cv <- 2*num.rule.max
     }
 
-    # fit sirus for each fold and compute prediction for all rule selections
+    # fit SIRUS for each fold and compute prediction for all rule selections
     pred.cv <- lapply(1:nfold, function(fold){
 
-      data.train <- data[folds.ind[[fold]]$train,]
+      data.train <- data[folds.ind[[fold]]$train, , drop = F]
       y.train <- y[folds.ind[[fold]]$train]
       sirus.cv <- sirus.fit(data.train, y.train, type = type, num.rule = num.rule.cv, p0 = NULL, q = q,
                             num.trees.step = num.trees.step, alpha = alpha, mtry = mtry, max.depth = max.depth,
                             num.trees = num.trees, num.threads = num.threads, replace = replace, 
                             sample.fraction = sample.fraction, verbose = FALSE, seed = seed)
-      data.test <- data[folds.ind[[fold]]$test,]
-      data.rule.test <- get.data.rule(data.test, sirus.cv$rules, sirus.cv$rules.out)
-      if (type == 'reg'){
-        data.rule.train <- get.data.rule(data.train, sirus.cv$rules, sirus.cv$rules.out)
+      data.test <- data[folds.ind[[fold]]$test, , drop = F]
+      if (length(sirus.cv$rules) > 0){
+        data.rule.test <- get.data.rule(data.test, sirus.cv$rules, sirus.cv$rules.out)
+        if (type == 'reg'){
+          data.rule.train <- get.data.rule(data.train, sirus.cv$rules, sirus.cv$rules.out)
+        }
+      }else{
+        data.rule.test <- as.data.frame(rep(sirus.cv$mean, nrow(data.test)))
+        if (type == 'reg'){
+          data.rule.train <- as.data.frame(rep(sirus.cv$mean, nrow(data.train)))
+        }
       }
       pred.df <- lapply(1:ncol(data.rule.test), function(ind){
         if (type == 'classif'){
@@ -546,7 +631,11 @@ sirus.cv <- function(data, y, type = 'auto', nfold = 10, ncv = NULL, num.rule.ma
         pred.df[[fold]][,folds.ncol[ind,fold]+1]
       }))
       if (type == 'classif'){
-        1 - as.numeric(performance(prediction(pred, y.test), "auc")@y.values)
+        if (length(unique(y.test)) == 1){
+          0.5
+        }else{
+          1 - as.numeric(performance(prediction(pred, y.test), "auc")@y.values)
+        }
       }else{
         sum((pred - y.test)^2)/sum((y.test - mean(y.test))^2)
       }
@@ -624,31 +713,34 @@ sirus.cv <- function(data, y, type = 'auto', nfold = 10, ncv = NULL, num.rule.ma
   ind.max <- which.min(abs(min(num.rule.max, max(num.rules.mean)) - num.rules.mean))
   error.grid.p0 <- error.grid.p0[ind.1:ind.max,]
 
-  ind.min <- ind.1 + which.min(error.mean[ind.1:ind.max])
-  ind.pred <- min(which(error.mean <= error.mean[ind.min] + 2*error.sd[ind.min]))
+  ind.min <- ind.1 - 1 + which.min(error.mean[ind.1:ind.max])
+  ind.pred <- max(ind.1, min(which(error.mean <= error.mean[ind.min] + 2*error.sd[ind.min])))
   dopt <- (0.90 - stab.mean)^2 + (0.0 - error.mean)^2
-  ind.stab <- ind.1 + which.min(dopt[ind.1:ind.max])
+  ind.stab <- ind.1 - 1 + which.min(dopt[ind.1:ind.max])
   
   return(list(p0.pred = p0.grid[ind.pred], p0.stab = p0.grid[ind.stab], error.grid.p0 = error.grid.p0, type = type))
   
 }
 
 #'
-#' Plot SIRUS cross-validation path: error and stability versus the number of rules when p0 varies.
+#' Plot SIRUS cross-validation path: error and stability versus the number of rules when \code{p0} varies.
 #'
-#' @title Plot SIRUS cross-validation.
+#' Error is 1-AUC for classification and the unexplained variance for regression.
+#' Stability is the average proportion of rules shared by two SIRUS models fit on two distinct folds of the cross-validation.
 #'
-#' @param sirus.cv.grid Cross-validation results returned by sirus.cv.
-#' @param p0.criterion Criterion to pick optimal p0 to display on plots: 'pred' to maximize accuracy and 'stab' for a tradeoff stability/accuracy. Default is 'stab' for regression and 'pred' for classification.
+#' @title Plot SIRUS cross-validation path.
+#'
+#' @param sirus.cv.grid Cross-validation results returned by \code{\link{sirus.cv}}.
+#' @param p0.criterion Criterion to pick the optimal \code{p0} displayed in the plots: if 'pred' then \code{p0.pred} is used for a minimal error, if 'stab' then \code{p0.stab} is used for a tradeoff error/stability. Default is 'pred' for classification and 'stab' for regression.
 #' @param num.rule.max Upper limit on the number of rules for the x-axis. Default is 25.
 #'
 #' @return Plots of cross-validation results.
-#'   \item{\code{error}}{plot of error vs number of rules (ggplot object).}
-#'   \item{\code{stab}}{plot of stability vs number of rules (ggplot object).}
+#'   \item{\code{error}}{plot of error vs number of rules (ggplot2 object).}
+#'   \item{\code{stability}}{plot of stability vs number of rules (ggplot2 object).}
 #' @export
 #'
 #' @examples
-#' ## load sirus
+#' ## load SIRUS
 #' require(sirus)
 #'
 #' ## prepare data
@@ -705,7 +797,8 @@ sirus.plot.cv <- function(sirus.cv.grid, p0.criterion = NULL, num.rule.max = 25)
   stab.mean <- NULL
   stab.sd <- NULL
 
-  # plot 1 - AUC vs number of rules
+  # plot error vs number of rules
+  label.error <- if (sirus.cv.grid$type == 'reg'){'Unexplained variance'}else{'1-AUC'}
   tag.y <- (min(error.grid.p0$error.mean) + max(error.grid.p0$error.mean))/2
   plot.error <- ggplot(error.grid.p0, aes(x = num.rules.mean, y = error.mean)) +
     geom_line(size = 0.8) + geom_point(size=1) +
@@ -716,11 +809,11 @@ sirus.plot.cv <- function(sirus.cv.grid, p0.criterion = NULL, num.rule.max = 25)
     geom_vline(xintercept = num.rules,
                linetype = 'dashed', color = 'blue', size = 0.7) +
     geom_text(aes(num.rules, tag.y, label = 'Optimal p0'), angle = '90',
-              vjust=1, color='blue', size = 7) +
-    geom_text(aes(num.rule.max - 5, error, label = paste0('SIRUS - ', round(error,2))),
+              vjust=1.5, color='blue', size = 7) +
+    geom_text(aes(num.rule.max - 5, error, label = paste0('SIRUS Error: ', round(error,2))),
               vjust=-1, color='blue', size = 7) +
     xlab('Number of rules') +
-    ylab('1-AUC') +
+    ylab(label.error) +
     theme_classic() +
     theme(axis.line.x = element_line(colour = 'black'),
           axis.line.y = element_line(colour = 'black'),
@@ -728,17 +821,23 @@ sirus.plot.cv <- function(sirus.cv.grid, p0.criterion = NULL, num.rule.max = 25)
           plot.title = element_text(hjust = 0.5, size=18, face="italic"))
 
   # plot stability vs number of rules
+  stab.extremum <- c(min(error.grid.p0$stab.mean), max(error.grid.p0$stab.mean))
+  tag.p0 <- (stab.extremum[which.max(abs(stab.extremum - stab))] + stab)/2
   plot.stab <- ggplot(error.grid.p0, aes(x = num.rules.mean, y = stab.mean)) +
     geom_line(size = 0.8) + geom_point() +
     geom_errorbar(aes(ymin=stab.mean - stab.sd,
                       ymax=stab.mean + stab.sd),  width=0.7, size=0.5)+
+    geom_hline(yintercept = stab,
+               linetype = 'dashed', color = 'blue', size = 0.7) +
     geom_vline(xintercept = num.rules,
                linetype = 'dashed', color = 'blue', size = 0.7) +
-    geom_text(aes(num.rules, mean(error.grid.p0$stab.mean), label = 'Optimal p0'), angle = '90',
-              vjust=1, color='blue', size = 7) +
+    geom_text(aes(num.rules, tag.p0, label = 'Optimal p0'), angle = '90',
+              vjust=1.5, color='blue', size = 7) +
+    geom_text(aes(num.rules, stab, label = paste0('SIRUS Stability: ', round(stab,2))),
+              vjust=-1, color='blue', size = 7) +
     xlab('Number of rules') +
     ylab('Stability') +
-    theme_classic() + ylim(c(0.9*min(error.grid.p0$stab.mean), 1.1*max(error.grid.p0$stab.mean)))
+    theme_classic() + ylim(c(0.9*min(error.grid.p0$stab.mean), 1.1*max(error.grid.p0$stab.mean))) +
     theme(axis.line.x = element_line(colour = 'black'),
         axis.line.y = element_line(colour = 'black'),
         text = element_text(size=20),

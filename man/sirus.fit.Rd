@@ -5,36 +5,53 @@
 \alias{sirus.fit}
 \title{Fit SIRUS.}
 \usage{
-sirus.fit(data, y, type = "auto", num.rule = 10, p0 = NULL,
-  num.rule.max = 25, q = 10, num.trees.step = 1000, alpha = 0.05,
-  mtry = NULL, max.depth = 2, num.trees = NULL, num.threads = NULL,
-  replace = TRUE, sample.fraction = ifelse(replace, 1, 0.632),
-  verbose = TRUE, seed = NULL)
+sirus.fit(
+  data,
+  y,
+  type = "auto",
+  num.rule = 10,
+  p0 = NULL,
+  num.rule.max = 25,
+  q = 10,
+  discrete.limit = 10,
+  num.trees.step = 1000,
+  alpha = 0.05,
+  mtry = NULL,
+  max.depth = 2,
+  num.trees = NULL,
+  num.threads = NULL,
+  replace = TRUE,
+  sample.fraction = ifelse(replace, 1, 0.632),
+  verbose = TRUE,
+  seed = NULL
+)
 }
 \arguments{
-\item{data}{Input dataframe, each row is an observation vector.}
+\item{data}{Input dataframe, each row is an observation vector. Each column is an input variable and is numeric or factor.}
 
-\item{y}{Numeric response variable. For classification, y takes only 0 and 1 values.}
+\item{y}{Numeric response variable. For classification, \code{y} takes only 0 and 1 values.}
 
-\item{type}{'reg' for regression, 'classif' for classification and 'auto' for automatic detection (classification if y takes only 0 and 1 values).}
+\item{type}{'reg' for regression, 'classif' for classification and 'auto' for automatic detection (classification if \code{y} takes only 0 and 1 values).}
 
-\item{num.rule}{Number of rules in SIRUS model. Default is 10. Ignored if a p0 value is provided. For regression, the effective number of rules can be smaller than num.rule because of the additional selection in the final linear aggregation of the rules.}
+\item{num.rule}{Number of rules in SIRUS model. Default is 10. Ignored if a \code{p0} value is provided. For regression, the effective number of rules can be smaller than \code{num.rule} because of null coefficients in the final linear aggregation of the rules.}
 
-\item{p0}{Selection threshold on the frequency of appearance of a path in the forest. Default is NULL and num.rule is used to select rules.}
+\item{p0}{Selection threshold on the frequency of appearance of a path in the forest to set the number of rules. Default is NULL and \code{num.rule} is used to select rules. \code{\link{sirus.cv}} provides the optimal \code{p0} by cross-validation.}
 
-\item{num.rule.max}{Maximum number of rules in SIRUS model. Ignored if num.rule is provided.}
+\item{num.rule.max}{Maximum number of rules in SIRUS model. Ignored if \code{num.rule} is provided.}
 
-\item{q}{Number of quantiles used for node splitting in the forest construction.}
+\item{q}{Number of quantiles used for node splitting in the forest construction. Default and recommended value is 10.}
 
-\item{num.trees.step}{Number of trees grown between two evaluations of the stopping criterion. Ignored if num.trees is provided.}
+\item{discrete.limit}{Maximum number of distinct values for a variable to be considered discrete. If higher, variable is continuous.}
 
-\item{alpha}{Parameter of the stopping criterion for the number of trees: stability has to reach 1 - alpha to stop the growing of the forest. Ignored if num.trees is provided.}
+\item{num.trees.step}{Number of trees grown between two evaluations of the stopping criterion. Ignored if \code{num.trees} is provided.}
+
+\item{alpha}{Parameter of the stopping criterion for the number of trees: stability has to reach 1-\code{alpha} to stop the growing of the forest. Ignored if \code{num.trees} is provided. Default value is 0.05.}
 
 \item{mtry}{Number of variables to possibly split at each node. Default is the number of variables divided by 3.}
 
-\item{max.depth}{Maximal tree depth. Default and strongly recommanded value is 2.}
+\item{max.depth}{Maximal tree depth. Default and recommended value is 2.}
 
-\item{num.trees}{Number of trees grown in the forest. Default is NULL. If NULL (recommanded), the number of trees is automatically set using a stability based stopping criterion.}
+\item{num.trees}{Number of trees grown in the forest. Default is NULL. If NULL (recommended), the number of trees is automatically set using a stability based stopping criterion.}
 
 \item{num.threads}{Number of threads used to grow the forest. Default is number of CPUs available.}
 
@@ -49,19 +66,49 @@ sirus.fit(data, y, type = "auto", num.rule = 10, p0 = NULL,
 \value{
 SIRUS model with elements
   \item{\code{rules}}{List of rules in SIRUS model.}
-  \item{\code{rules.out}}{List of rule outputs. rule.out: the output mean whether the rule is satisfied or not. supp.size: the number of points inside and outside the rule.}
+  \item{\code{rules.out}}{List of rule outputs. \code{rule.out}: the output mean whether the rule is satisfied or not. \code{supp.size}: the number of points inside and outside the rule.}
   \item{\code{proba}}{Frequency of occurence of paths in the forest.}
-  \item{\code{paths}}{List of selected paths.}
+  \item{\code{paths}}{List of selected paths (symbolic representation with quantile order for continuous variables).}
+  \item{\code{rule.weights}}{Vector of positive or null coefficients assigned to each rule for the linear aggregation (1/number of rules for classification).}
+  \item{\code{rule.glm}}{Fitted glmnet object for regression (linear rule aggregation with ridge penalty).}
+  \item{\code{type}}{Type of SIRUS model: 'reg' for regression, 'classif' for classification.} 
+  \item{\code{num.trees}}{Number of trees used to build SIRUS.}
+  \item{\code{data.names}}{Names of input variables.}
   \item{\code{mean}}{Mean output over the full training data. Default model output if no rule is selected.}
+  \item{\code{bins}}{List of type and possible split values for all input variables.}
 }
 \description{
-Fit a SIRUS model for a given number of rules (10 by default) or a given p0.
-If the output y takes only 0 and 1 values a classification model is fit, otherwise a regression model is fit.
-The number of trees is tuned automatically with a stopping criterion based on stability.
-The hyperparameter p0 can be tuned using sirus.cv.
+Fit SIRUS for a given number of rules (10 by default) or a given \code{p0}. \cr
+SIRUS is a regression and classification algorithm, based on random forests (Breiman, 2001), that takes the form of a short list of rules.
+SIRUS combines the simplicity of rule algorithms or decision trees with an accuracy close to random forests.
+More importantly, the rule selection is stable with respect to data perturbation.
+SIRUS for classification is defined in (Benard et al. 2019), and the extension to regression is provided in (Benard et al. 2020).
+}
+\details{
+If the output \code{y} takes only 0 and 1 values, a classification model is fit, otherwise a regression model is fit.
+SIRUS algorithm proceeds the following steps:
+\enumerate{
+  \item Discretize data
+  \item Fit a random forest
+  \item Extract rules from tree nodes
+  \item Select the most frequent rules (which occur in at least a fraction p0 of the trees)
+  \item Filter rules to remove linear dependence between them
+  \item Aggregate the selected rules
+     \itemize{
+        \item Classification: rules are averaged
+        \item Regression: rules are linearly combined via a ridge regression (constrained to have all coefficients positive)
+     }
+}
+The hyperparameter \code{p0} can be tuned using \code{\link{sirus.cv}} to set the optimal number of rules. \cr
+The number of trees is automatically set with a stopping criterion based on stability: 
+the forest growing is stopped when the number of trees is high enough to ensure that 95\% of the rules in average are identical over two runs of SIRUS on the provided dataset. \cr
+Data is discretized depending on variable types: numerical variables are binned using \code{q}-quantiles, 
+categorical variables are transformed in ordered variables as in \code{\link[ranger]{ranger}} (standard method to handle categorical variables in trees),
+while discrete variables (numerical variables with less than \code{discrete.limit} distinct values) are left untouched.
+Notice that categorical variables with a high number of categories should be discarded or transformed, as SIRUS is likely to identify associated irrelevant rules.
 }
 \examples{
-## load sirus
+## load SIRUS
 require(sirus)
 
 ## prepare data
@@ -70,8 +117,15 @@ y <- rep(0, nrow(data))
 y[data$Species == 'setosa'] = 1
 data$Species <- NULL
 
-## fit sirus
+## fit SIRUS
 sirus.m <- sirus.fit(data, y)
 
-
+}
+\references{
+\itemize{
+  \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2019). SIRUS: Stable and Interpretable RUle Set for Classification. arXiv preprint arXiv:1908.06852. \url{https://arxiv.org/abs/1908.06852}.
+  \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2020). Interpretable Random Forests via Rule Extraction. arXiv preprint arXiv:2004.14841. \url{https://arxiv.org/abs/2004.14841}. 
+  \item Breiman, L. (2001). Random forests. Machine learning, 45, 5-32.
+  \item Wright, M. N. & Ziegler, A. (2017). ranger: A fast implementation of random forests for high dimensional data in C++ and R. J Stat Softw 77:1-17. \url{https://doi.org/10.18637/jss.v077.i01}.
+}
 }

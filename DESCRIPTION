@@ -1,20 +1,20 @@
 Package: sirus
 Type: Package
 Title: Stable and Interpretable RUle Set
-Version: 0.2.1
-Date: 2020-01-20
+Version: 0.3.1
+Date: 2020-11-27
 Author: Clement Benard [aut, cre], Marvin N. Wright [ctb, cph]
-Maintainer: Clement Benard <clement.benard@safrangroup.com>
-Description: A regression and classification algorithm based on random forests, which takes the form of a short list of rules. SIRUS combines the simplicity of decision trees with the predictivity of random forests for problems with low order interactions. The core aggregation principle of random forests is kept, but instead of aggregating predictions, SIRUS selects the most frequent nodes of the forest to form a stable rule ensemble model. The algorithm is fully described in the following article: Benard C., Biau G., da Veiga S., Scornet E. (2019) <arXiv:1908.06852>. This R package is a fork from the project ranger (<https://github.com/imbs-hl/ranger>). 
+Maintainer: Clement Benard <clement.benard5@gmail.com>
+Description: A regression and classification algorithm based on random forests, which takes the form of a short list of rules. SIRUS combines the simplicity of decision trees with a predictivity close to random forests. The core aggregation principle of random forests is kept, but instead of aggregating predictions, SIRUS aggregates the forest structure: the most frequent nodes of the forest are selected to form a stable rule ensemble model. The algorithm is fully described in the following articles: Benard C., Biau G., da Veiga S., Scornet E. (2019) <arXiv:1908.06852> for classification, and Benard C., Biau G., da Veiga S., Scornet E. (2020) <arXiv:2004.14841> for regression. This R package is a fork from the project ranger (<https://github.com/imbs-hl/ranger>). 
 License: GPL-3
 Imports: Rcpp (>= 0.11.2), Matrix, ROCR, ggplot2, glmnet
-LinkingTo: Rcpp
+LinkingTo: Rcpp, RcppEigen
 Depends: R (>= 3.1)
 Suggests: survival, testthat
-RoxygenNote: 6.1.1
+RoxygenNote: 7.1.1
 URL: https://gitlab.com/drti/sirus
-BugReports: https://gitlab.com/drti/sirus/issues
+BugReports: https://gitlab.com/drti/sirus/-/issues
 NeedsCompilation: yes
-Packaged: 2020-01-20 14:46:48 UTC; d584316
+Packaged: 2020-12-08 15:03:17 UTC; d584316
 Repository: CRAN
-Date/Publication: 2020-01-20 17:30:03 UTC
+Date/Publication: 2020-12-08 17:40:03 UTC
