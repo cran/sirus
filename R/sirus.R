@@ -3,7 +3,7 @@
 #' SIRUS is a regression and classification algorithm, based on random forests (Breiman, 2001), that takes the form of a short list of rules.
 #' SIRUS combines the simplicity of rule algorithms or decision trees with an accuracy close to random forests.
 #' More importantly, the rule selection is stable with respect to data perturbation.
-#' SIRUS for classification is defined in (Benard et al. 2019), and the extension to regression is provided in (Benard et al. 2020).
+#' SIRUS for classification is defined in (Benard et al. 2021), and the extension to regression is provided in (Benard et al. 2020).
 #' 
 #' If the output \code{y} takes only 0 and 1 values, a classification model is fit, otherwise a regression model is fit.
 #' SIRUS algorithm proceeds the following steps:
@@ -77,10 +77,10 @@
 #'
 #' @references
 #' \itemize{
-#'   \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2019). SIRUS: Stable and Interpretable RUle Set for Classification. arXiv preprint arXiv:1908.06852. \url{https://arxiv.org/abs/1908.06852}.
+#'   \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2021). SIRUS: Stable and Interpretable RUle Set for Classification. Electronic Journal of Statistics, 15:427-505. \doi{10.1214/20-EJS1792}.
 #'   \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2020). Interpretable Random Forests via Rule Extraction. arXiv preprint arXiv:2004.14841. \url{https://arxiv.org/abs/2004.14841}. 
 #'   \item Breiman, L. (2001). Random forests. Machine learning, 45, 5-32.
-#'   \item Wright, M. N. & Ziegler, A. (2017). ranger: A fast implementation of random forests for high dimensional data in C++ and R. J Stat Softw 77:1-17. \url{https://doi.org/10.18637/jss.v077.i01}.
+#'   \item Wright, M. N. & Ziegler, A. (2017). ranger: A fast implementation of random forests for high dimensional data in C++ and R. J Stat Softw 77:1-17. \doi{10.18637/jss.v077.i01}.
 #' }
 #' @encoding UTF-8
 #' @useDynLib sirus
@@ -239,7 +239,7 @@ sirus.fit <- function(data, y, type = 'auto', num.rule = 10, p0 = NULL, num.rule
       rule.weights <- as.vector(rule.glm$beta)
     }else{
       rule.glm <- NULL
-      rule.weights <- rep(1/num.rule, num.rule)
+      rule.weights <- rep(1/length(rules), length(rules))
     }
     
   }else{
@@ -410,10 +410,10 @@ sirus.predict <- function(sirus.m, data.test){
 }
 
 #'
-#' Estimate the optimal hyperparameter \code{p0} used to select rules in \code{\link{sirus.fit}} using cross-validation (Benard et al. 2019, 2020).
+#' Estimate the optimal hyperparameter \code{p0} used to select rules in \code{\link{sirus.fit}} using cross-validation (Benard et al. 2020, 2021).
 #' 
 #' For a robust estimation of \code{p0}, it is recommended to run multiple cross-validations (typically \code{ncv} = 10).
-#' Two optimal values of \code{p0} are provided: \code{p0.pred} (Benard et al. 2019) and \code{p0.stab} (Benard et al. 2020), defined such that \code{p0.pred} minimizes the error, and \code{p0.stab} finds a tradeoff between error and stability.
+#' Two optimal values of \code{p0} are provided: \code{p0.pred} (Benard et al. 2021) and \code{p0.stab} (Benard et al. 2020), defined such that \code{p0.pred} minimizes the error, and \code{p0.stab} finds a tradeoff between error and stability.
 #' Error is 1-AUC for classification and the unexplained variance for regression.
 #' Stability is the average proportion of rules shared by two SIRUS models fit on two distinct folds of the cross-validation.
 #'
@@ -462,7 +462,7 @@ sirus.predict <- function(sirus.m, data.test){
 #'
 #' @references
 #' \itemize{
-#'   \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2019). SIRUS: Stable and Interpretable RUle Set for Classification. arXiv preprint arXiv:1908.06852. \url{https://arxiv.org/abs/1908.06852}.
+#'   \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2021). SIRUS: Stable and Interpretable RUle Set for Classification. Electronic Journal of Statistics, 15:427-505. \doi{10.1214/20-EJS1792}.
 #'   \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2020). Interpretable Random Forests via Rule Extraction. arXiv preprint arXiv:2004.14841. \url{https://arxiv.org/abs/2004.14841}.
 #' }
 sirus.cv <- function(data, y, type = 'auto', nfold = 10, ncv = 10, num.rule.max = 25, q = 10,
@@ -715,10 +715,13 @@ sirus.cv <- function(data, y, type = 'auto', nfold = 10, ncv = 10, num.rule.max 
 
   ind.min <- ind.1 - 1 + which.min(error.mean[ind.1:ind.max])
   ind.pred <- max(ind.1, min(which(error.mean <= error.mean[ind.min] + 2*error.sd[ind.min])))
-  dopt <- (0.90 - stab.mean)^2 + (0.0 - error.mean)^2
-  ind.stab <- ind.1 - 1 + which.min(dopt[ind.1:ind.max])
+  p0.stab.cv <- sapply(error.grids, function(grid.cv){
+    criterion <- (grid.cv$stab.grid[ind.1:ind.max] - 0.90)^2 + (0.0 - grid.cv$error.grid[ind.1:ind.max])^2
+    p0.grid[ind.1:ind.max][which.min(criterion)]
+  })
+  p0.stab <- median(p0.stab.cv)
   
-  return(list(p0.pred = p0.grid[ind.pred], p0.stab = p0.grid[ind.stab], error.grid.p0 = error.grid.p0, type = type))
+  return(list(p0.pred = p0.grid[ind.pred], p0.stab = p0.stab, error.grid.p0 = error.grid.p0, type = type))
   
 }
 
@@ -773,22 +776,21 @@ sirus.plot.cv <- function(sirus.cv.grid, p0.criterion = NULL, num.rule.max = 25)
     stop('Invalid maximum number of rules. Its value should be a positive integer.')
   }
 
-  # filter cv grid
+  # filter cv grid & performance metrics
   error.grid.p0 <- sirus.cv.grid$error.grid.p0
   num.rule.max <- min(num.rule.max, max(error.grid.p0$num.rules.mean))
   grid.index <- sapply(1:num.rule.max, function(ind){which.min(abs(ind - sirus.cv.grid$error.grid.p0$num.rules.mean))[1]})
-  error.grid.p0 <- sirus.cv.grid$error.grid.p0[grid.index,]
-
-  # performance metrics
   if (p0.criterion == 'stab'){
     p0 <- sirus.cv.grid$p0.stab
   }else{
     p0 <- sirus.cv.grid$p0.pred
   }
-  grid.cv <- sirus.cv.grid$error.grid.p0[sirus.cv.grid$error.grid.p0$p0.grid == p0,]
+  ind.p0 <- which.min(abs(sirus.cv.grid$error.grid.p0$p0.grid - p0))
+  grid.cv <- sirus.cv.grid$error.grid.p0[ind.p0,]
   num.rules <- grid.cv$num.rules.mean
   error <- grid.cv$error.mean
   stab <- grid.cv$stab.mean
+  error.grid.p0 <- sirus.cv.grid$error.grid.p0[sort(unique(c(grid.index,ind.p0))),]
   
   # declare variables
   num.rules.mean <- NULL
@@ -810,7 +812,7 @@ sirus.plot.cv <- function(sirus.cv.grid, p0.criterion = NULL, num.rule.max = 25)
                linetype = 'dashed', color = 'blue', size = 0.7) +
     geom_text(aes(num.rules, tag.y, label = 'Optimal p0'), angle = '90',
               vjust=1.5, color='blue', size = 7) +
-    geom_text(aes(num.rule.max - 5, error, label = paste0('SIRUS Error: ', round(error,2))),
+    geom_text(aes(num.rule.max - 8, error, label = paste0('SIRUS Error: ', round(error,2))),
               vjust=-1, color='blue', size = 7) +
     xlab('Number of rules') +
     ylab(label.error) +
@@ -833,7 +835,7 @@ sirus.plot.cv <- function(sirus.cv.grid, p0.criterion = NULL, num.rule.max = 25)
                linetype = 'dashed', color = 'blue', size = 0.7) +
     geom_text(aes(num.rules, tag.p0, label = 'Optimal p0'), angle = '90',
               vjust=1.5, color='blue', size = 7) +
-    geom_text(aes(num.rules, stab, label = paste0('SIRUS Stability: ', round(stab,2))),
+    geom_text(aes(num.rules - 5, stab, label = paste0('SIRUS Stability: ', round(stab,2))),
               vjust=-1, color='blue', size = 7) +
     xlab('Number of rules') +
     ylab('Stability') +
