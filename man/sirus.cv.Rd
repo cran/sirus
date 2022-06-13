@@ -72,11 +72,11 @@ Optimal value of \code{p0} with the elements
   \item{\code{type}}{'reg' for regression, 'classif' for classification.}
 }
 \description{
-Estimate the optimal hyperparameter \code{p0} used to select rules in \code{\link{sirus.fit}} using cross-validation (Benard et al. 2020, 2021).
+Estimate the optimal hyperparameter \code{p0} used to select rules in \code{\link{sirus.fit}} using cross-validation (Benard et al. 2021a, 2021b).
 }
 \details{
 For a robust estimation of \code{p0}, it is recommended to run multiple cross-validations (typically \code{ncv} = 10).
-Two optimal values of \code{p0} are provided: \code{p0.pred} (Benard et al. 2021) and \code{p0.stab} (Benard et al. 2020), defined such that \code{p0.pred} minimizes the error, and \code{p0.stab} finds a tradeoff between error and stability.
+Two optimal values of \code{p0} are provided: \code{p0.pred} (Benard et al. 2021a) and \code{p0.stab} (Benard et al. 2021b), defined such that \code{p0.pred} minimizes the error, and \code{p0.stab} finds a tradeoff between error and stability.
 Error is 1-AUC for classification and the unexplained variance for regression.
 Stability is the average proportion of rules shared by two SIRUS models fit on two distinct folds of the cross-validation.
 }
@@ -96,7 +96,7 @@ cv.grid <- sirus.cv(data, y, nfold = 3, ncv = 2, num.trees = 100)
 }
 \references{
 \itemize{
-  \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2021). SIRUS: Stable and Interpretable RUle Set for Classification. Electronic Journal of Statistics, 15:427-505. \doi{10.1214/20-EJS1792}.
-  \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2020). Interpretable Random Forests via Rule Extraction. arXiv preprint arXiv:2004.14841. \url{https://arxiv.org/abs/2004.14841}.
+  \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2021a). SIRUS: Stable and Interpretable RUle Set for Classification. Electronic Journal of Statistics, 15:427-505. \doi{10.1214/20-EJS1792}.
+  \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2021b). Interpretable Random Forests via Rule Extraction. Proceedings of The 24th International Conference on Artificial Intelligence and Statistics, PMLR 130:937-945. \url{http://proceedings.mlr.press/v130/benard21a}. 
 }
 }

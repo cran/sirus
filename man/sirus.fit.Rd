@@ -82,7 +82,7 @@ Fit SIRUS for a given number of rules (10 by default) or a given \code{p0}. \cr
 SIRUS is a regression and classification algorithm, based on random forests (Breiman, 2001), that takes the form of a short list of rules.
 SIRUS combines the simplicity of rule algorithms or decision trees with an accuracy close to random forests.
 More importantly, the rule selection is stable with respect to data perturbation.
-SIRUS for classification is defined in (Benard et al. 2021), and the extension to regression is provided in (Benard et al. 2020).
+SIRUS for classification is defined in (Benard et al. 2021a), and the extension to regression is provided in (Benard et al. 2021b).
 }
 \details{
 If the output \code{y} takes only 0 and 1 values, a classification model is fit, otherwise a regression model is fit.
@@ -123,8 +123,8 @@ sirus.m <- sirus.fit(data, y)
 }
 \references{
 \itemize{
-  \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2021). SIRUS: Stable and Interpretable RUle Set for Classification. Electronic Journal of Statistics, 15:427-505. \doi{10.1214/20-EJS1792}.
-  \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2020). Interpretable Random Forests via Rule Extraction. arXiv preprint arXiv:2004.14841. \url{https://arxiv.org/abs/2004.14841}. 
+  \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2021a). SIRUS: Stable and Interpretable RUle Set for Classification. Electronic Journal of Statistics, 15:427-505. \doi{10.1214/20-EJS1792}.
+  \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2021b). Interpretable Random Forests via Rule Extraction. Proceedings of The 24th International Conference on Artificial Intelligence and Statistics, PMLR 130:937-945. \url{http://proceedings.mlr.press/v130/benard21a}. 
   \item Breiman, L. (2001). Random forests. Machine learning, 45, 5-32.
   \item Wright, M. N. & Ziegler, A. (2017). ranger: A fast implementation of random forests for high dimensional data in C++ and R. J Stat Softw 77:1-17. \doi{10.18637/jss.v077.i01}.
 }

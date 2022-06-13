@@ -3,7 +3,7 @@
 #' SIRUS is a regression and classification algorithm, based on random forests (Breiman, 2001), that takes the form of a short list of rules.
 #' SIRUS combines the simplicity of rule algorithms or decision trees with an accuracy close to random forests.
 #' More importantly, the rule selection is stable with respect to data perturbation.
-#' SIRUS for classification is defined in (Benard et al. 2021), and the extension to regression is provided in (Benard et al. 2020).
+#' SIRUS for classification is defined in (Benard et al. 2021a), and the extension to regression is provided in (Benard et al. 2021b).
 #' 
 #' If the output \code{y} takes only 0 and 1 values, a classification model is fit, otherwise a regression model is fit.
 #' SIRUS algorithm proceeds the following steps:
@@ -77,8 +77,8 @@
 #'
 #' @references
 #' \itemize{
-#'   \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2021). SIRUS: Stable and Interpretable RUle Set for Classification. Electronic Journal of Statistics, 15:427-505. \doi{10.1214/20-EJS1792}.
-#'   \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2020). Interpretable Random Forests via Rule Extraction. arXiv preprint arXiv:2004.14841. \url{https://arxiv.org/abs/2004.14841}. 
+#'   \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2021a). SIRUS: Stable and Interpretable RUle Set for Classification. Electronic Journal of Statistics, 15:427-505. \doi{10.1214/20-EJS1792}.
+#'   \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2021b). Interpretable Random Forests via Rule Extraction. Proceedings of The 24th International Conference on Artificial Intelligence and Statistics, PMLR 130:937-945. \url{http://proceedings.mlr.press/v130/benard21a}. 
 #'   \item Breiman, L. (2001). Random forests. Machine learning, 45, 5-32.
 #'   \item Wright, M. N. & Ziegler, A. (2017). ranger: A fast implementation of random forests for high dimensional data in C++ and R. J Stat Softw 77:1-17. \doi{10.18637/jss.v077.i01}.
 #' }
@@ -410,10 +410,10 @@ sirus.predict <- function(sirus.m, data.test){
 }
 
 #'
-#' Estimate the optimal hyperparameter \code{p0} used to select rules in \code{\link{sirus.fit}} using cross-validation (Benard et al. 2020, 2021).
+#' Estimate the optimal hyperparameter \code{p0} used to select rules in \code{\link{sirus.fit}} using cross-validation (Benard et al. 2021a, 2021b).
 #' 
 #' For a robust estimation of \code{p0}, it is recommended to run multiple cross-validations (typically \code{ncv} = 10).
-#' Two optimal values of \code{p0} are provided: \code{p0.pred} (Benard et al. 2021) and \code{p0.stab} (Benard et al. 2020), defined such that \code{p0.pred} minimizes the error, and \code{p0.stab} finds a tradeoff between error and stability.
+#' Two optimal values of \code{p0} are provided: \code{p0.pred} (Benard et al. 2021a) and \code{p0.stab} (Benard et al. 2021b), defined such that \code{p0.pred} minimizes the error, and \code{p0.stab} finds a tradeoff between error and stability.
 #' Error is 1-AUC for classification and the unexplained variance for regression.
 #' Stability is the average proportion of rules shared by two SIRUS models fit on two distinct folds of the cross-validation.
 #'
@@ -462,8 +462,8 @@ sirus.predict <- function(sirus.m, data.test){
 #'
 #' @references
 #' \itemize{
-#'   \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2021). SIRUS: Stable and Interpretable RUle Set for Classification. Electronic Journal of Statistics, 15:427-505. \doi{10.1214/20-EJS1792}.
-#'   \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2020). Interpretable Random Forests via Rule Extraction. arXiv preprint arXiv:2004.14841. \url{https://arxiv.org/abs/2004.14841}.
+#'   \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2021a). SIRUS: Stable and Interpretable RUle Set for Classification. Electronic Journal of Statistics, 15:427-505. \doi{10.1214/20-EJS1792}.
+#'   \item Benard, C., Biau, G., Da Veiga, S. & Scornet, E. (2021b). Interpretable Random Forests via Rule Extraction. Proceedings of The 24th International Conference on Artificial Intelligence and Statistics, PMLR 130:937-945. \url{http://proceedings.mlr.press/v130/benard21a}. 
 #' }
 sirus.cv <- function(data, y, type = 'auto', nfold = 10, ncv = 10, num.rule.max = 25, q = 10,
                      discrete.limit = 10, num.trees.step = 1000, alpha = 0.05, mtry = NULL,
@@ -474,9 +474,15 @@ sirus.cv <- function(data, y, type = 'auto', nfold = 10, ncv = 10, num.rule.max 
   data.y.check(data, y)
   #check nfold
   nfold.valid <- is.numeric(nfold)
-  if (nfold.valid){nfold.valid <- (round(nfold) == nfold) & nfold >= 2 & nfold <= nrow(data)}
+  if (nfold.valid){nfold.valid <- (round(nfold) == nfold) & nfold >= 2}
   if (!nfold.valid){
-    stop('Invalid nfold. Number of cross-validation folds has to be an integer between 2 and the sample size.')
+    stop('Invalid nfold. Number of cross-validation folds has to be an integer greater than 2.')
+  }else{
+    if (nfold > nrow(data)){
+      nfold <- nrow(data)
+      warning(paste0('Warning nfold: nfold is greater than the sample size (=', nrow(data), '),
+                      and is then automatically set to ', nfold, '.'))
+    }
   }
   # set type
   type.valid <- type %in% c('auto', 'reg', 'classif')
@@ -599,9 +605,9 @@ sirus.cv <- function(data, y, type = 'auto', nfold = 10, ncv = 10, num.rule.max 
       beta.df <- lapply(pred.df, function(pred.ind){
         pred.ind$beta
       })
-      pred.df <- sapply(pred.df, function(pred.ind){
+      pred.df <- matrix(sapply(pred.df, function(pred.ind){
         pred.ind$pred
-      })
+      }), nrow = nrow(data.rule.test))
       pred.df <- cbind(rep(sirus.cv$mean, nrow(pred.df)), pred.df)
       proba.cv <- sirus.cv$proba
       paths.cv <- sirus.cv$paths

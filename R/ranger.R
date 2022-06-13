@@ -82,7 +82,7 @@ ranger <- function(formula = NULL, data = NULL, num.trees = 500, mtry = NULL,
     data.selected <- data
   } else {
     formula <- formula(formula)
-    if (class(formula) != "formula") {
+    if (!inherits(formula, "formula")) {
       stop("Error: Invalid formula.")
     }
     data.selected <- parse.formula(formula, data, env = parent.frame())
@@ -120,7 +120,7 @@ ranger <- function(formula = NULL, data = NULL, num.trees = 500, mtry = NULL,
     } else {
       treetype <- 3
     }
-  } else if (class(response) == "Surv" || is.data.frame(response) || is.matrix(response)) {
+  } else if (inherits(response, "Surv") || is.data.frame(response) || is.matrix(response)) {
     treetype <- 5
   } else {
     stop("Error: Unsupported type of dependent variable.")

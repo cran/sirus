@@ -371,7 +371,7 @@ get.rule.support.from.bin <- function(path, data.bin){
   apply(splits, 1, prod)
 }
 get.rule.support <- function(data, rules){  
-  as.data.frame(sapply(rules, function(rule){
+  as.data.frame(lapply(rules, function(rule){
     Z <- sapply(rule, function(split){
       X <- data[,split[1]]
       if (is.numeric(X)){
@@ -387,7 +387,11 @@ get.rule.support <- function(data, rules){
       }
       Z
     })
-    apply(Z, 1, all)
+    if (!is.matrix(Z)){
+      all(Z)
+    }else{
+      apply(Z, 1, all)
+    }
   }))
 }
 get.rule.outputs <- function(data.rule.supp, y){
@@ -403,15 +407,15 @@ get.rule.outputs <- function(data.rule.supp, y){
 get.data.rule <- function(data, rules, rules.out){
   rules.bool <- get.rule.support(data, rules)
   ndata <- nrow(data)
-  data.rule <- sapply(1:length(rules), function(ind) {
+  data.rule <- matrix(sapply(1:length(rules), function(ind) {
     if (ndata > 1){
       rule.out <- rep(rules.out[[ind]]$outputs[2], ndata)
       rule.out[rules.bool[,ind]] <- rules.out[[ind]]$outputs[1]
     }else{
-      rule.out <- if(rules.bool[ind]){rules.out[[ind]]$outputs[1]}else{rules.out[[ind]]$outputs[2]}
+      rule.out <- if(rules.bool[,ind]){rules.out[[ind]]$outputs[1]}else{rules.out[[ind]]$outputs[2]}
     }
     rule.out
-  })
+  }), nrow = ndata)
   return(data.rule)
 }
 
